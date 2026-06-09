@@ -330,8 +330,8 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <div class="proc-grid">
       <button class="proc-btn ai" id="btn-ai" onclick="processarComClaude()">
         <div class="proc-btn-ic">🤖</div>
-        <div class="proc-btn-lbl">Processar com Claude IA</div>
-        <div class="proc-btn-sub">Leitura inteligente via API<br>Maior precisão</div>
+        <div class="proc-btn-lbl">Processar via Servidor</div>
+        <div class="proc-btn-sub">Parser preciso no servidor<br>Sem limite de tamanho</div>
       </button>
       <button class="proc-btn local" id="btn-local" onclick="processarLocalPDF()">
         <div class="proc-btn-ic">⚡</div>
@@ -341,8 +341,8 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     </div>
     <div class="ai-progress" id="ai-progress">
       <div class="ai-steps">
-        <div class="ai-step" id="step-upload"><span class="ai-step-ic">→</span>Enviando PDF para Claude...</div>
-        <div class="ai-step" id="step-read"><span class="ai-step-ic">○</span>Lendo todos os lançamentos...</div>
+        <div class="ai-step" id="step-upload"><span class="ai-step-ic">→</span>Extraindo texto do PDF...</div>
+        <div class="ai-step" id="step-read"><span class="ai-step-ic">○</span>Enviando para o servidor...</div>
         <div class="ai-step" id="step-parse"><span class="ai-step-ic">○</span>Agrupando por cliente...</div>
         <div class="ai-step" id="step-save"><span class="ai-step-ic">○</span>Salvando dados...</div>
       </div>
@@ -898,12 +898,16 @@ async function processarComClaude(){
   try{
     addLog(`📄 Arquivo: ${arquivoPDFSelecionado.name} (${formatarBytes(arquivoPDFSelecionado.size)})`,'info');
     const ab=await arquivoPDFSelecionado.arrayBuffer();
-    const bytes=new Uint8Array(ab);let binary='';
-    const sz=8192;for(let i=0;i<bytes.length;i+=sz)binary+=String.fromCharCode(...bytes.subarray(i,i+sz));
-    const base64=btoa(binary);
-    aiStep(1);setProgress(30);
-    addLog('🤖 Enviando para Claude IA...','info');
-    const resp=await fetch('/api/parse-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({pdf_base64:base64})});
+    const pdfDoc=await pdfjsLib.getDocument({data:ab}).promise;
+    const todasLinhas=[];
+    for(let p=1;p<=pdfDoc.numPages;p++){
+      const pg=await pdfDoc.getPage(p);
+      const lg=await extrairLinhasDaPagina(pg);
+      todasLinhas.push(...lg);
+    }
+    aiStep(1);setProgress(40);
+    addLog(`📤 Enviando ${todasLinhas.length} linhas para o servidor...`,'info');
+    const resp=await fetch('/api/parse-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lines:todasLinhas})});
     aiStep(2);setProgress(70);
     const data=await resp.json();
     if(!resp.ok||data.error)throw new Error(data.error||`Erro ${resp.status}`);

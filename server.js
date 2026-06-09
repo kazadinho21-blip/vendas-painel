@@ -1,96 +1,90 @@
 require('dotenv').config();
 const express = require('express');
-const Anthropic = require('@anthropic-ai/sdk');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '5mb' }));
 app.use(express.static(__dirname));
 
-const PROMPT = `Analise o relatorio de VENDAS POR VENDEDOR da Douratubos e retorne APENAS um objeto JSON.
+const UFS = new Set(['MS','PR','SP','RJ','MG','GO','MT','RS','SC','BA','PE','CE','PA','AM','RO','TO','MA','PI','RN','PB','AL','SE','ES','DF','AC','AP','RR']);
+const MESES_MAP = {1:'jan',2:'fev',3:'mar',4:'abr',5:'mai',6:'jun',7:'jul',8:'ago',9:'set',10:'out',11:'nov',12:'dez'};
+const MESES_NOME = {jan:'Janeiro',fev:'Fevereiro',mar:'Março',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
 
-ESTRUTURA DE CADA LINHA:
-EMISSAO | PEDIDO | NOTA | CFOP | CONDICAO | COD_CLIENTE(5 digitos) | NOME_CLIENTE | CPF/CNPJ | NR_DOC | CIDADE | UF | QTDE | PRECO_UNIT | TOTAL | PECA | SERVICO | COMISSAO
+function parseBR(s) {
+  if (s.includes('/')) return null;
+  const n = parseFloat(s.replace(/\./g, '').replace(',', '.'));
+  return isNaN(n) ? null : n;
+}
 
-INSTRUCOES:
-- Some a coluna TOTAL (nao some TOTAL+PECA, sao duplicatas na mesma linha)
-- Agrupe por COD_CLIENTE (5 digitos numericos)
-- Linhas com DEV./DEVOLUCAO ja tem valor negativo - inclua normalmente
-- Ignore linhas de cabecalho, subtotal e rodape
-- 55555 = CONSUMIDOR/BALCAO - inclua normalmente
-- Mes/ano: detecte do cabecalho (ex: "01/01/2026 a 31/01/2026" = jan/2026)
+function parseLines(lines) {
+  const clientes = {};
+  let pedidos = 0;
+  let mesKey = null, ano = null;
 
-MESES: janeiro=jan|fevereiro=fev|marco=mar|abril=abr|maio=mai|junho=jun|julho=jul|agosto=ago|setembro=set|outubro=out|novembro=nov|dezembro=dez
+  for (const line of lines) {
+    const t = line.trim();
 
-FORMATO DE SAIDA - retorne SOMENTE este JSON sem nenhum texto antes ou depois:
-{"mes":"jan","label":"Janeiro/2026","total":336524.50,"pedidos":573,"meta":0,"clientes":{"28181":{"nome":"ESSENCE EMPREENDIMENTOS LTDA","total":45574.51},"55555":{"nome":"CONSUMIDOR / BALCAO","total":22938.49}}}
+    // Detect period from header line
+    if (!mesKey) {
+      const m = t.match(/Per[ií]odo\s+\d{2}\/(\d{2})\/(\d{4})/i) || t.match(/\d{2}\/(\d{2})\/(\d{4})\s+a\s/);
+      if (m) { mesKey = MESES_MAP[parseInt(m[1])]; ano = m[2]; }
+    }
 
-IMPORTANTE: NAO explique raciocinio. NAO liste clientes em texto. Comece com { e termine com }.`;
+    const parts = t.split(/\s+/);
+    if (parts.length < 10) continue;
+    if (!/^\d{2}\/\d{2}\/\d{4}$/.test(parts[0])) continue;
 
-app.post('/api/parse-pdf', async (req, res) => {
+    // Find 5-digit client code
+    let cod = null, codIdx = -1;
+    for (let i = 0; i < parts.length; i++) {
+      if (/^\d{5}$/.test(parts[i])) { cod = parts[i]; codIdx = i; break; }
+    }
+    if (!cod) continue;
+
+    // Find LAST UF (geographic, not inside client name)
+    let ufIdx = -1;
+    for (let i = parts.length - 1; i >= 0; i--) {
+      if (UFS.has(parts[i])) { ufIdx = i; break; }
+    }
+    if (ufIdx < 0) continue;
+
+    // Numbers after UF: QTDE, PRECO_UNIT, TOTAL, PECA, ...
+    const nums = parts.slice(ufIdx + 1).map(parseBR).filter(n => n !== null);
+    if (nums.length < 3) continue;
+
+    const total = nums[2]; // TOTAL column only (not PECA duplicate)
+    pedidos++;
+
+    // Get client name
+    const cpfIdx = parts.findIndex(p => p.includes('CPF') || p.includes('CNPJ'));
+    const nome = (cpfIdx > codIdx) ? parts.slice(codIdx + 1, cpfIdx).join(' ') : '';
+
+    if (!clientes[cod]) clientes[cod] = { nome: '', total: 0 };
+    if (nome.length > clientes[cod].nome.length) clientes[cod].nome = nome;
+    clientes[cod].total = Math.round((clientes[cod].total + total) * 100) / 100;
+  }
+
+  if (clientes['55555']) clientes['55555'].nome = 'CONSUMIDOR / BALCAO';
+
+  const grandTotal = Math.round(Object.values(clientes).reduce((s, c) => s + c.total, 0) * 100) / 100;
+  const label = mesKey ? `${MESES_NOME[mesKey]}/${ano}` : 'Desconhecido';
+
+  return { mes: mesKey || 'jan', label, total: grandTotal, pedidos, meta: 0, clientes };
+}
+
+app.post('/api/parse-text', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY nao configurada no arquivo .env' });
-
-  const { pdf_base64 } = req.body || {};
-  if (!pdf_base64) return res.status(400).json({ error: 'pdf_base64 obrigatorio.' });
-  if (pdf_base64.length > 8000000) return res.status(413).json({ error: 'PDF muito grande. Use processamento local.' });
-
+  const { lines } = req.body || {};
+  if (!lines || !Array.isArray(lines)) return res.status(400).json({ error: 'lines[] obrigatorio.' });
   try {
-    const client = new Anthropic({ apiKey });
-    const message = await client.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 16000,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf_base64 } },
-            { type: 'text', text: PROMPT },
-          ],
-        },
-        {
-          role: 'assistant',
-          content: '{'
-        }
-      ],
-    });
-
-    const raw = '{' + (message.content[0]?.text || '').trim();
-    const jsonStr = raw.replace(/```(?:json)?\s*/gi, '').trim();
-
-    let result;
-    try {
-      result = JSON.parse(jsonStr);
-    } catch (_) {
-      const m = jsonStr.match(/\{[\s\S]+\}/);
-      if (m) result = JSON.parse(m[0]);
-      else throw new Error('Claude nao retornou JSON valido: ' + raw.substring(0, 300));
+    const result = parseLines(lines);
+    if (!result.mes || Object.keys(result.clientes).length === 0) {
+      return res.status(422).json({ error: 'Nenhum lancamento encontrado. Verifique o PDF.' });
     }
-
-    if (!result.mes || typeof result.clientes !== 'object') {
-      throw new Error('JSON incompleto - campos mes ou clientes ausentes.');
-    }
-
-    result.total = Math.round(
-      Object.values(result.clientes).reduce((s, c) => s + (c.total || 0), 0) * 100
-    ) / 100;
-
-    return res.status(200).json({
-      success: true,
-      mes: result.mes,
-      label: result.label,
-      total: result.total,
-      pedidos: result.pedidos || 0,
-      meta: result.meta || 0,
-      clientes: result.clientes,
-    });
-
+    return res.status(200).json({ success: true, ...result });
   } catch (err) {
-    console.error('Erro parse-pdf:', err.message);
-    return res.status(500).json({ error: err.message || 'Erro interno.' });
+    console.error('parse-text error:', err.message);
+    return res.status(500).json({ error: err.message });
   }
 });
 
