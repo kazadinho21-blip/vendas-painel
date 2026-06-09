@@ -23,52 +23,37 @@ function parseLines(lines) {
 
   for (const line of lines) {
     const t = line.trim();
-
-    // Detect period from header line
     if (!mesKey) {
       const m = t.match(/Per[ií]odo\s+\d{2}\/(\d{2})\/(\d{4})/i) || t.match(/\d{2}\/(\d{2})\/(\d{4})\s+a\s/);
       if (m) { mesKey = MESES_MAP[parseInt(m[1])]; ano = m[2]; }
     }
-
     const parts = t.split(/\s+/);
     if (parts.length < 10) continue;
     if (!/^\d{2}\/\d{2}\/\d{4}$/.test(parts[0])) continue;
-
-    // Find 5-digit client code
     let cod = null, codIdx = -1;
     for (let i = 0; i < parts.length; i++) {
       if (/^\d{5}$/.test(parts[i])) { cod = parts[i]; codIdx = i; break; }
     }
     if (!cod) continue;
-
-    // Find LAST UF (geographic, not inside client name)
     let ufIdx = -1;
     for (let i = parts.length - 1; i >= 0; i--) {
       if (UFS.has(parts[i])) { ufIdx = i; break; }
     }
     if (ufIdx < 0) continue;
-
-    // Numbers after UF: QTDE, PRECO_UNIT, TOTAL, PECA, ...
     const nums = parts.slice(ufIdx + 1).map(parseBR).filter(n => n !== null);
     if (nums.length < 3) continue;
-
-    const total = nums[2]; // TOTAL column only (not PECA duplicate)
+    const total = nums[2];
     pedidos++;
-
-    // Get client name
     const cpfIdx = parts.findIndex(p => p.includes('CPF') || p.includes('CNPJ'));
     const nome = (cpfIdx > codIdx) ? parts.slice(codIdx + 1, cpfIdx).join(' ') : '';
-
     if (!clientes[cod]) clientes[cod] = { nome: '', total: 0 };
     if (nome.length > clientes[cod].nome.length) clientes[cod].nome = nome;
     clientes[cod].total = Math.round((clientes[cod].total + total) * 100) / 100;
   }
 
   if (clientes['55555']) clientes['55555'].nome = 'CONSUMIDOR / BALCAO';
-
   const grandTotal = Math.round(Object.values(clientes).reduce((s, c) => s + c.total, 0) * 100) / 100;
   const label = mesKey ? `${MESES_NOME[mesKey]}/${ano}` : 'Desconhecido';
-
   return { mes: mesKey || 'jan', label, total: grandTotal, pedidos, meta: 0, clientes };
 }
 
@@ -83,7 +68,6 @@ app.post('/api/parse-text', (req, res) => {
     }
     return res.status(200).json({ success: true, ...result });
   } catch (err) {
-    console.error('parse-text error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
