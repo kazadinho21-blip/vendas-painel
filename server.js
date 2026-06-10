@@ -4,7 +4,15 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '5mb' }));
-app.use(express.static(__dirname));
+app.use(express.static(__dirname, {
+  etag: false,
+  lastModified: false,
+  setHeaders: (res, path) => {
+    if (path.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
+    }
+  }
+}));
 
 const UFS = new Set(['MS','PR','SP','RJ','MG','GO','MT','RS','SC','BA','PE','CE','PA','AM','RO','TO','MA','PI','RN','PB','AL','SE','ES','DF','AC','AP','RR']);
 const MESES_MAP = {1:'jan',2:'fev',3:'mar',4:'abr',5:'mai',6:'jun',7:'jul',8:'ago',9:'set',10:'out',11:'nov',12:'dez'};
