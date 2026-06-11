@@ -261,7 +261,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
       </select>
       <span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     </div>
-    <button id="sync-btn" onclick="sincronizarDados()" title="Sincronizar usuários e dados" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s">⟳ Sync</button>
+    <button id="sync-btn" onclick="sincronizarDados()" title="Sincronizar dados de todos os vendedores" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s">⟳ Sync</button>
     <button class="logout-btn" onclick="fazerLogout()">↩ Sair</button>
   </div>
 </header>
@@ -587,55 +587,52 @@ function trocarVendedor(val){
   const _vbi=document.getElementById('vendor-bar-info');if(_vbi)_vbi.textContent=vendedorVizualizado!=='todos'?vendedorVizualizado:'';
   carregarDadosAtivos();buildDashboard();
 }
-// ── Sincronizar: puxa roles do servidor e atualiza localStorage ──────────────
+// Empurra ESTADO do usuario atual para o servidor (apos import)
+async function pushSalesData(username,estado){
+  try{await fetch('/api/public/sales-push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:username,estado})});}catch(e){}
+}
+// Empurra lista de usuarios (sem senha) para o servidor
+async function pushUsuariosParaServidor(){
+  try{const lista=getUsuarios().map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});}catch(e){}
+}
+// Sincronizar: puxa roles E dados de vendas do servidor
 async function sincronizarDados(){
   const btn=document.getElementById('sync-btn');
   if(btn){btn.textContent='⟳ ...';btn.disabled=true;}
+  let ok=false;
   try{
-    const sr=await fetch('/api/public/users');
-    if(!sr.ok)throw new Error('Servidor indisponível');
-    const lista=await sr.json();
-    if(!Array.isArray(lista)||lista.length===0)throw new Error('Lista vazia');
-    const locals=getUsuarios();let changed=0;
-    lista.forEach(srv=>{
-      const idx=locals.findIndex(l=>l.usuario===srv.usuario);
-      if(idx>=0){
-        const old=locals[idx];
-        if(old.role!==srv.role||old.nome!==srv.nome||old.codigo!==srv.codigo){
-          locals[idx]={...old,role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};
-          changed++;
+    // 1. Puxa roles atualizados
+    const ur=await fetch('/api/public/users');
+    if(ur.ok){
+      const lista=await ur.json();
+      if(Array.isArray(lista)&&lista.length>0){
+        const locals=getUsuarios();let changed=0;
+        lista.forEach(srv=>{
+          const idx=locals.findIndex(l=>l.usuario===srv.usuario);
+          if(idx>=0&&(locals[idx].role!==srv.role||locals[idx].nome!==srv.nome||locals[idx].codigo!==srv.codigo)){
+            locals[idx]={...locals[idx],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};changed++;
+          }
+        });
+        if(changed>0){salvarUsuarios(locals);if(usuarioAtual){const me=locals.find(l=>l.usuario===usuarioAtual.usuario);if(me)usuarioAtual=me;}}
+      }
+    }
+    // 2. Puxa dados de vendas de todos os vendedores
+    const sr=await fetch('/api/public/sales');
+    if(sr.ok){
+      const allSales=await sr.json();
+      Object.entries(allSales).forEach(([username,d])=>{
+        if(d&&d.estado&&d.estado.meses&&d.estado.clientes){
+          localStorage.setItem(`dt_dados_${username}`,JSON.stringify(d.estado));
         }
-      }
-    });
-    if(changed>0){
-      salvarUsuarios(locals);
-      // Atualiza usuarioAtual se seu proprio role mudou
-      if(usuarioAtual){
-        const me=locals.find(l=>l.usuario===usuarioAtual.usuario);
-        if(me)usuarioAtual=me;
-      }
+      });
     }
-    // Recarrega dados e dashboard
-    if(isGerente()){
-      atualizarSeletorVendedores();
-      document.getElementById('nav-vendedores').style.display='flex';
-      document.getElementById('vendor-bar').style.display='flex';
-      const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='block';
-    }
+    ok=true;
+    // 3. Recarrega
+    if(isGerente()){atualizarSeletorVendedores();document.getElementById('nav-vendedores').style.display='flex';document.getElementById('vendor-bar').style.display='flex';const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='block';}
     carregarDadosAtivos();buildDashboard();
     if(isAdmin())renderAdminPanel();
-    if(btn){btn.textContent='✓ Sync';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},1500);}
-    else{btn&&(btn.disabled=false);}
-  }catch(err){
-    if(btn){btn.textContent='✗ Sync';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},2000);}
-  }
-}
-// ── Push: admin empurra lista de usuarios para o servidor ─────────────────────
-async function pushUsuariosParaServidor(){
-  try{
-    const lista=getUsuarios().map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));
-    await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});
   }catch(e){}
+  if(btn){btn.textContent=ok?'✓ Sync':'✗ Sync';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},1800);}
 }
 function carregarDadosUsuario(){
   ESTADO={meses:{},clientes:{}};
@@ -687,31 +684,25 @@ async function fazerLogin(){
   let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
   if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
   erroEl.textContent='';
-  // Pull user metadata from server (roles, names) before login
+  // Puxa roles atualizados do servidor antes de aplicar o login
   try{
     const sr=await fetch('/api/public/users');
     if(sr.ok){
       const lista=await sr.json();
       if(Array.isArray(lista)&&lista.length>0){
-        // Merge server metadata into localStorage (atualiza role/nome/codigo de todos)
-        const locals=getUsuarios();
-        let changed=false;
+        const locals=getUsuarios();let changed=false;
         lista.forEach(srv=>{
           const idx=locals.findIndex(l=>l.usuario===srv.usuario);
-          if(idx>=0){
-            if(locals[idx].role!==srv.role||locals[idx].nome!==srv.nome||locals[idx].codigo!==srv.codigo){
-              locals[idx]={...locals[idx],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};
-              changed=true;
-            }
+          if(idx>=0&&(locals[idx].role!==srv.role||locals[idx].nome!==srv.nome||locals[idx].codigo!==srv.codigo)){
+            locals[idx]={...locals[idx],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};
+            changed=true;
           }
         });
-        if(changed)salvarUsuarios(locals);
-        // Re-find after merge
-        found=getUsuarios().find(x=>x.usuario===u&&x.senha===s)||found;
+        if(changed){salvarUsuarios(locals);found=getUsuarios().find(x=>x.usuario===u&&x.senha===s)||found;}
       }
     }
   }catch(e){}
-  // Server-side auth token (silent)
+  // Auth token silencioso para /api/parse-text
   try{const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});if(sr.ok){const sd=await sr.json();if(sd.token)sessionStorage.setItem('dt_srv_token',sd.token);}}catch(e){}
   usuarioAtual=found;
   sessionStorage.setItem('dt_sessao',found.usuario);
@@ -1076,8 +1067,7 @@ async function processarComClaude(){
     addLog(`✓ Período: ${data.label}`,'ok');
     addLog(`✓ ${Object.keys(data.clientes).length} clientes · R$ ${(data.total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,'ok');
     if(_targetUser&&_targetUser!==usuarioAtual.usuario){
-      const _tst=carregarEstadoVendedor(_targetUser);
-      const _tmeses=Object.keys(_tst.meses);const _mk=data.mes;
+      const _tst=carregarEstadoVendedor(_targetUser);const _tmeses=Object.keys(_tst.meses);const _mk=data.mes;
       Object.values(_tst.clientes).forEach(c=>{if(c[_mk]===undefined)c[_mk]=0;});
       Object.entries(data.clientes||{}).forEach(([cod,c])=>{
         if(!_tst.clientes[cod]){_tst.clientes[cod]={nome:c.nome||''};_tmeses.forEach(m=>{_tst.clientes[cod][m]=0;});}
@@ -1086,8 +1076,12 @@ async function processarComClaude(){
       });
       _tst.meses[_mk]={total:data.total||0,pedidos:data.pedidos||0,meta:0,carregado:true};
       localStorage.setItem(`dt_dados_${_targetUser}`,JSON.stringify(_tst));
+      pushSalesData(_targetUser,_tst);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
-    }else{const ok=importarJSONdoClaude(data);if(!ok)throw new Error('Erro ao salvar dados.');}
+    }else{
+      const ok=importarJSONdoClaude(data);if(!ok)throw new Error('Erro ao salvar dados.');
+      pushSalesData(usuarioAtual.usuario,ESTADO);
+    }
     setProgress(100);aiStepDone();
     setStatus(`✅ ${data.label} importado! ${Object.keys(data.clientes).length} clientes · R$ ${Math.round(data.total||0).toLocaleString('pt-BR')}`,'ok');
     addLog('✅ Importação concluída!','ok');
@@ -1181,8 +1175,12 @@ async function carregarPDF(file){
       });
       _tst.meses[info.mes]={total:Math.round(totalCalc*100)/100,pedidos:nLanc,meta:0,carregado:true};
       localStorage.setItem(`dt_dados_${_ltgt}`,JSON.stringify(_tst));
+      pushSalesData(_ltgt,_tst);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
-    }else{aplicarDadosMes(info.mes,acumulado,totalCalc,nLanc,0);}
+    }else{
+      aplicarDadosMes(info.mes,acumulado,totalCalc,nLanc,0);
+      pushSalesData(usuarioAtual.usuario,ESTADO);
+    }
     setStatus(`✓ ${info.label} importado! ${Object.keys(acumulado).length} clientes`,'ok');
     addLog('✅ Concluído!','ok');
   }catch(err){setStatus('Erro: '+err.message,'err');addLog('✗ '+err.message,'err');console.error(err);}
