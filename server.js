@@ -1,4 +1,4 @@
-// server.js v12 — multi-role: admin / gerente / vendedor
+// server.js v13 — parse-text sem autenticacao (todos os usuarios podem importar PDF)
 require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
@@ -86,6 +86,7 @@ function requireRole(...roles) {
   };
 }
 
+// AUTH
 app.post('/api/login', (req, res) => {
   const { usuario, senha } = req.body || {};
   const u = Object.values(users).find(x => x.id === usuario);
@@ -102,6 +103,7 @@ app.get('/api/me', authMw, (req, res) => {
   res.json({ id: u.id, nome: u.nome, role: u.role, cod: u.cod });
 });
 
+// USERS (admin only)
 app.get('/api/users', authMw, requireRole('admin'), (req, res) => {
   res.json(Object.values(users).map(u => ({ id: u.id, nome: u.nome, role: u.role, cod: u.cod })));
 });
@@ -134,6 +136,7 @@ app.delete('/api/users/:id', authMw, requireRole('admin'), (req, res) => {
   res.json({ ok: true });
 });
 
+// SALES DATA (autenticado)
 app.get('/api/sales', authMw, (req, res) => {
   if (req.user.role === 'vendedor') return res.json(salesData[req.user.id] || {});
   const result = {};
@@ -163,7 +166,10 @@ app.delete('/api/sales/:mesKey', authMw, (req, res) => {
 });
 
 // =====================================================
-// PARSER v12 — fixed regex, handles devolutions
+// PARSER v13 — SEM AUTENTICACAO
+// Todos os usuarios (mesmo so com login local) podem
+// usar "Processar via Servidor". O resultado e salvo
+// pelo cliente no localStorage do usuario correto.
 // =====================================================
 const MESES_MAP  = {1:'jan',2:'fev',3:'mar',4:'abr',5:'mai',6:'jun',7:'jul',8:'ago',9:'set',10:'out',11:'nov',12:'dez'};
 const MESES_NOME = {jan:'Janeiro',fev:'Fevereiro',mar:'Marco',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
@@ -198,9 +204,11 @@ function parseLines(lines) {
 
     if (!/^\d{2}\/\d{2}\/\d{4}\s/.test(line)) continue;
 
+    // 6 colunas numericas no final (suporta negativos para devolucoes)
     const mV = line.match(/([-\d.]+,\d+)\s+([-\d.]+,\d+)\s+([-\d.]+,\d+)\s+[-\d.]+,\d+\s+[-\d.]+,\d+\s+[-\d.]+,\d+\s*$/);
     if (!mV) continue;
 
+    // Codigo 5 digitos antes de CPF/CNPJ
     const mCod = line.match(/\b(\d{5})\b\s+(.+?)\s*CPF\/CNPJ/i);
     if (!mCod) continue;
 
@@ -236,16 +244,15 @@ function parseLines(lines) {
   return { mes: mesKey || 'jan', label, total: grandTotal, pedidos: resumoPedidos || pedidos, meta: 0, clientes };
 }
 
-app.post('/api/parse-text', authMw, (req, res) => {
+// SEM authMw — qualquer usuario pode parsear PDF via servidor
+app.post('/api/parse-text', (req, res) => {
   const { lines } = req.body || {};
   if (!lines || !Array.isArray(lines)) return res.status(400).json({ error: 'lines[] obrigatorio' });
   try {
     const result = parseLines(lines);
     if (!result.mes || Object.keys(result.clientes).length === 0)
       return res.status(422).json({ error: 'Nenhum lancamento encontrado. Verifique o PDF.' });
-    if (!salesData[req.user.id]) salesData[req.user.id] = {};
-    salesData[req.user.id][result.mes] = result;
-    saveSalesFile(req.user.id, result.mes, result);
+    // Nao salva server-side — o cliente salva no localStorage do usuario correto
     return res.json({ success: true, ...result });
   } catch(err) {
     console.error('parse-text error:', err.message);
@@ -253,4 +260,4 @@ app.post('/api/parse-text', authMw, (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log('Painel Douratubos v12 em http://localhost:' + PORT));
+app.listen(PORT, () => console.log('Painel Douratubos v13 em http://localhost:' + PORT));
