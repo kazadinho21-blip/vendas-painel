@@ -1,4 +1,4 @@
-// server.js v13 — parse-text sem autenticacao (todos os usuarios podem importar PDF)
+// server.js v14 — sync de usuarios via /api/public/users + /api/push-users
 require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
@@ -9,7 +9,8 @@ const PORT = process.env.PORT || 3000;
 
 const DATA_DIR = path.join(__dirname, 'data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
-const SALES_DIR = path.join(DATA_DIR, 'sales');
+const SYNC_FILE  = path.join(DATA_DIR, 'sync_users.json'); // metadados sem senha
+const SALES_DIR  = path.join(DATA_DIR, 'sales');
 [DATA_DIR, SALES_DIR].forEach(d => { if (!fs.existsSync(d)) fs.mkdirSync(d, { recursive: true }); });
 
 const DEFAULT_USERS = {
@@ -23,7 +24,7 @@ function loadUsers() {
       const d = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
       if (Object.keys(d).length > 0) { users = d; return; }
     }
-  } catch(e) { console.error('loadUsers:', e.message); }
+  } catch(e) {}
   users = JSON.parse(JSON.stringify(DEFAULT_USERS));
   saveUsers();
 }
@@ -42,8 +43,7 @@ function loadSalesData() {
         salesData[uid][mesKey] = d;
       } catch(e) {}
     });
-    console.log('Dados carregados para ' + Object.keys(salesData).length + ' usuario(s)');
-  } catch(e) { console.error('loadSalesData:', e.message); }
+  } catch(e) {}
 }
 function saveSalesFile(uid, mesKey, data) {
   fs.writeFileSync(path.join(SALES_DIR, uid + '__' + mesKey + '.json'), JSON.stringify(data));
@@ -61,7 +61,7 @@ function createToken(uid) {
   return t;
 }
 
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(__dirname, {
   etag: false, lastModified: false,
   setHeaders: (res, fp) => {
@@ -73,7 +73,7 @@ function authMw(req, res, next) {
   const t = req.headers['x-auth-token'];
   if (!t) return res.status(401).json({ error: 'Nao autenticado' });
   const s = sessions.get(t);
-  if (!s) return res.status(401).json({ error: 'Sessao expirada. Faca login novamente.' });
+  if (!s) return res.status(401).json({ error: 'Sessao expirada.' });
   const u = users[s.uid];
   if (!u) return res.status(401).json({ error: 'Usuario invalido' });
   req.user = u;
@@ -86,7 +86,7 @@ function requireRole(...roles) {
   };
 }
 
-// AUTH
+// ── AUTH ──────────────────────────────────────────────
 app.post('/api/login', (req, res) => {
   const { usuario, senha } = req.body || {};
   const u = Object.values(users).find(x => x.id === usuario);
@@ -103,16 +103,46 @@ app.get('/api/me', authMw, (req, res) => {
   res.json({ id: u.id, nome: u.nome, role: u.role, cod: u.cod });
 });
 
-// USERS (admin only)
+// ── SYNC PUBLICA (sem senha) ──────────────────────────
+// GET /api/public/users — retorna lista com usuario/nome/codigo/role (sem senha)
+app.get('/api/public/users', (req, res) => {
+  try {
+    if (fs.existsSync(SYNC_FILE)) {
+      const d = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8'));
+      if (Array.isArray(d) && d.length > 0) return res.json(d);
+    }
+  } catch(e) {}
+  // fallback: dados dos users conhecidos pelo servidor (sem senha)
+  res.json(Object.values(users).map(u => ({ usuario: u.id, nome: u.nome, codigo: u.cod || '', role: u.role })));
+});
+
+// POST /api/push-users — admin envia lista completa (sem senha) para sincronizar
+// Sem autenticacao: o payload nao tem dado sensivel (sem senhas)
+app.post('/api/push-users', (req, res) => {
+  const { users: list } = req.body || {};
+  if (!Array.isArray(list) || list.length === 0) return res.status(400).json({ error: 'lista invalida' });
+  // Valida que nao tem campos sensiveis (apenas metadados)
+  const clean = list.map(u => ({
+    usuario: String(u.usuario || '').toLowerCase().trim(),
+    nome: String(u.nome || '').toUpperCase().trim(),
+    codigo: String(u.codigo || '').trim(),
+    role: ['admin','gerente','vendedor'].includes(u.role) ? u.role : 'vendedor'
+  })).filter(u => u.usuario);
+  if (clean.length === 0) return res.status(400).json({ error: 'nenhum usuario valido' });
+  fs.writeFileSync(SYNC_FILE, JSON.stringify(clean, null, 2));
+  res.json({ ok: true, count: clean.length });
+});
+
+// ── USERS (admin, com senha) ──────────────────────────
 app.get('/api/users', authMw, requireRole('admin'), (req, res) => {
   res.json(Object.values(users).map(u => ({ id: u.id, nome: u.nome, role: u.role, cod: u.cod })));
 });
 app.post('/api/users', authMw, requireRole('admin'), (req, res) => {
   const { id, nome, senha, role, cod } = req.body || {};
-  if (!id || !nome || !senha) return res.status(400).json({ error: 'id, nome e senha sao obrigatorios' });
+  if (!id || !nome || !senha) return res.status(400).json({ error: 'campos obrigatorios' });
   if (users[id]) return res.status(409).json({ error: 'ID ja existe' });
   if (!['admin','gerente','vendedor'].includes(role)) return res.status(400).json({ error: 'role invalido' });
-  users[id] = { id, nome: nome.toUpperCase(), senha, role: role || 'vendedor', cod: cod || null };
+  users[id] = { id, nome: nome.toUpperCase(), senha, role, cod: cod || null };
   saveUsers();
   res.json({ ok: true });
 });
@@ -136,7 +166,7 @@ app.delete('/api/users/:id', authMw, requireRole('admin'), (req, res) => {
   res.json({ ok: true });
 });
 
-// SALES DATA (autenticado)
+// ── SALES DATA ────────────────────────────────────────
 app.get('/api/sales', authMw, (req, res) => {
   if (req.user.role === 'vendedor') return res.json(salesData[req.user.id] || {});
   const result = {};
@@ -165,12 +195,7 @@ app.delete('/api/sales/:mesKey', authMw, (req, res) => {
   res.json({ ok: true });
 });
 
-// =====================================================
-// PARSER v13 — SEM AUTENTICACAO
-// Todos os usuarios (mesmo so com login local) podem
-// usar "Processar via Servidor". O resultado e salvo
-// pelo cliente no localStorage do usuario correto.
-// =====================================================
+// ── PARSER v14 — sem autenticacao ─────────────────────
 const MESES_MAP  = {1:'jan',2:'fev',3:'mar',4:'abr',5:'mai',6:'jun',7:'jul',8:'ago',9:'set',10:'out',11:'nov',12:'dez'};
 const MESES_NOME = {jan:'Janeiro',fev:'Fevereiro',mar:'Marco',abr:'Abril',mai:'Maio',jun:'Junho',jul:'Julho',ago:'Agosto',set:'Setembro',out:'Outubro',nov:'Novembro',dez:'Dezembro'};
 
@@ -178,20 +203,16 @@ function parseBR(s) {
   const n = parseFloat(String(s).replace(/\./g,'').replace(',','.'));
   return isNaN(n) ? null : n;
 }
-
 function parseLines(lines) {
   const clientes = {};
   let pedidos = 0, mesKey = null, ano = null, resumoTotal = null, resumoPedidos = null;
-
   for (const rawLine of lines) {
     const line = rawLine.trim();
-
     if (!mesKey) {
       const m = line.match(/Per[ií]odo\s+\d{2}\/(\d{2})\/(\d{4})/i) ||
                 line.match(/\d{2}\/(\d{2})\/(\d{4})\s+a\s+\d{2}\/\d{2}\/\d{4}/);
       if (m) { mesKey = MESES_MAP[parseInt(m[m.length-2])]; ano = m[m.length-1]; }
     }
-
     if (resumoTotal === null && line.toUpperCase().includes('TOTAL GERAL')) {
       const nums = line.split(/\s+/).map(parseBR).filter(n => n !== null);
       const totais = nums.filter(n => n > 10000);
@@ -201,37 +222,24 @@ function parseLines(lines) {
         if (cands.length > 0) resumoPedidos = cands[0];
       }
     }
-
     if (!/^\d{2}\/\d{2}\/\d{4}\s/.test(line)) continue;
-
-    // 6 colunas numericas no final (suporta negativos para devolucoes)
     const mV = line.match(/([-\d.]+,\d+)\s+([-\d.]+,\d+)\s+([-\d.]+,\d+)\s+[-\d.]+,\d+\s+[-\d.]+,\d+\s+[-\d.]+,\d+\s*$/);
     if (!mV) continue;
-
-    // Codigo 5 digitos antes de CPF/CNPJ
     const mCod = line.match(/\b(\d{5})\b\s+(.+?)\s*CPF\/CNPJ/i);
     if (!mCod) continue;
-
-    const cod = mCod[1];
-    const nome = mCod[2].trim().replace(/\s+/g, ' ');
+    const cod = mCod[1], nome = mCod[2].trim().replace(/\s+/g, ' ');
     const total = parseBR(mV[3]);
     if (total === null || total === 0) continue;
-
     pedidos++;
     if (!clientes[cod]) clientes[cod] = { nome: '', total: 0 };
     if (nome.length > clientes[cod].nome.length) clientes[cod].nome = nome;
     clientes[cod].total = Math.round((clientes[cod].total + total) * 100) / 100;
   }
-
   if (clientes['55555']) clientes['55555'].nome = 'CONSUMIDOR / BALCAO';
   for (const cod of Object.keys(clientes)) {
     if (clientes[cod].total === 0) delete clientes[cod];
   }
-
-  let grandTotal = Math.round(
-    Object.values(clientes).reduce((s, c) => s + c.total, 0) * 100
-  ) / 100;
-
+  let grandTotal = Math.round(Object.values(clientes).reduce((s, c) => s + c.total, 0) * 100) / 100;
   if (resumoTotal && resumoTotal > 0 && Math.abs(grandTotal - resumoTotal) > 1) {
     const scale = resumoTotal / grandTotal;
     for (const cod of Object.keys(clientes)) {
@@ -239,25 +247,21 @@ function parseLines(lines) {
     }
     grandTotal = resumoTotal;
   }
-
   const label = mesKey ? (MESES_NOME[mesKey] + '/' + (ano || '')) : 'Desconhecido';
   return { mes: mesKey || 'jan', label, total: grandTotal, pedidos: resumoPedidos || pedidos, meta: 0, clientes };
 }
 
-// SEM authMw — qualquer usuario pode parsear PDF via servidor
 app.post('/api/parse-text', (req, res) => {
   const { lines } = req.body || {};
   if (!lines || !Array.isArray(lines)) return res.status(400).json({ error: 'lines[] obrigatorio' });
   try {
     const result = parseLines(lines);
     if (!result.mes || Object.keys(result.clientes).length === 0)
-      return res.status(422).json({ error: 'Nenhum lancamento encontrado. Verifique o PDF.' });
-    // Nao salva server-side — o cliente salva no localStorage do usuario correto
+      return res.status(422).json({ error: 'Nenhum lancamento encontrado.' });
     return res.json({ success: true, ...result });
   } catch(err) {
-    console.error('parse-text error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
 
-app.listen(PORT, () => console.log('Painel Douratubos v13 em http://localhost:' + PORT));
+app.listen(PORT, () => console.log('Painel Douratubos v14 em http://localhost:' + PORT));
