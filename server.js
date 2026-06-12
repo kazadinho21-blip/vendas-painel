@@ -142,11 +142,24 @@ app.post('/api/public/sales-push', (req, res) => {
 // Admin/gerente busca dados de todos os vendedores
 app.get('/api/public/sales', (req, res) => {
   try {
+    // Carrega metadados de usuarios (sync_users.json > users.json)
+    let syncUsers = [];
+    try {
+      if (fs.existsSync(SYNC_FILE)) syncUsers = JSON.parse(fs.readFileSync(SYNC_FILE, 'utf8'));
+      if (!Array.isArray(syncUsers) || syncUsers.length === 0)
+        syncUsers = Object.values(users).map(u => ({ usuario: u.id, nome: u.nome, codigo: u.cod || '', role: u.role }));
+    } catch(e) {}
+    const userMap = {};
+    syncUsers.forEach(u => { userMap[u.usuario] = u; });
+
     const result = {};
     fs.readdirSync(PUB_DIR).filter(f => f.endsWith('.json')).forEach(file => {
       try {
         const d = JSON.parse(fs.readFileSync(path.join(PUB_DIR, file), 'utf8'));
-        if (d.usuario && d.estado) result[d.usuario] = { estado: d.estado, updatedAt: d.updatedAt };
+        if (d.usuario && d.estado) {
+          const meta = userMap[d.usuario] || { nome: d.usuario, codigo: '', role: 'vendedor' };
+          result[d.usuario] = { estado: d.estado, updatedAt: d.updatedAt, meta };
+        }
       } catch(e) {}
     });
     res.json(result);
