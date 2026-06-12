@@ -254,7 +254,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <span class="badge-live">● AO VIVO</span>
     <span id="hora"></span>
     <div class="user-badge"><div class="user-dot"></div><span id="user-nome-badge">—</span></div>
-    <div id="vendor-bar" style="display:none;align-items:center;gap:6px;margin-right:6px"><span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">👁</span><select id="vendor-sel-global" onchange="trocarVendedor(this.value)" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:4px 8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;outline:none;max-width:180px"><option value="todos">Todos os Vendedores</option></select><span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div>
+    <div id="vendor-bar" style="display:none;align-items:center;gap:6px;margin-right:6px"><span style="font-size:9px;font-family:var(--mono);color:var(--text3)">👁</span><select id="vendor-sel-global" onchange="trocarVendedor(this.value)" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:4px 8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;outline:none;max-width:180px"><option value="todos">Todos os Vendedores</option></select><span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div>
     <button id="sync-btn" onclick="sincronizarDados()" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer">⟳ Sync</button>
     <button class="logout-btn" onclick="fazerLogout()">↩ Sair</button>
   </div>
@@ -268,8 +268,9 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
   <div class="nav" onclick="showView('meses',this)"><span class="nav-ic">◷</span>Por Mês</div>
   <div class="nav" onclick="showView('ranking',this)"><span class="nav-ic">◉</span>Ranking Top 20</div>
   <div class="nav" onclick="showView('importar',this)"><span class="nav-ic">⊕</span>Importar PDF</div>
+  <div class="nav" id="nav-publicar" onclick="publicarDados()" style="display:none"><span class="nav-ic">📤</span>Publicar Dados</div>
   <div class="nav" id="nav-admin" onclick="showView('admin',this)" style="display:none"><span class="nav-ic">⚙</span>Usuários <span style="font-size:9px;color:var(--green);font-family:var(--mono)">Admin</span></div>
-  <div class="nav" id="nav-vendedores" onclick="showView('vendedores',this)" style="display:none"><span class="nav-ic">◎</span>Vendedores <span style="font-size:9px;color:var(--text3);font-family:var(--mono)">Gerente</span></div>
+  <div class="nav" id="nav-vendedores" onclick="showView('vendedores',this)" style="display:none"><span class="nav-ic">◎</span>Vendedores</div>
   <div class="slabel" style="margin-top:14px">Filtro Mês</div>
   <div id="sidebar-filtros"></div>
 </nav>
@@ -375,7 +376,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <div class="admin-title">Usuários cadastrados</div>
     <div class="twrap"><div class="tscroll">
       <table class="user-table">
-        <thead><tr><th>Usuário</th><th>Nome</th><th>Código</th><th>Senha</th><th>Tipo/Role</th><th style="text-align:center">Ações</th></tr></thead>
+        <thead><tr><th>Usuário</th><th>Nome</th><th>Código</th><th>Senha</th><th>Tipo</th><th style="text-align:center">Ações</th></tr></thead>
         <tbody id="admin-tbody"></tbody>
       </table>
     </div></div>
@@ -388,7 +389,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
         <div class="form-group"><div class="form-label">Nome</div><input class="sinp" id="new-nome" placeholder="ex: JOÃO SILVA"></div>
         <div class="form-group"><div class="form-label">Código vendedor</div><input class="sinp" id="new-codigo" placeholder="ex: 0068"></div>
         <div class="form-group"><div class="form-label">Senha</div><input class="sinp" id="new-senha" type="text" placeholder="ex: senha123"></div>
-        <div class="form-group"><div class="form-label">Tipo</div><select class="sinp" id="new-role" style="cursor:pointer"><option value="vendedor">Vendedor</option><option value="gerente">Gerente</option><option value="admin">Admin</option></select></div>
+        <div class="form-group"><div class="form-label">Tipo</div><select class="sinp" id="new-role"><option value="vendedor">Vendedor</option><option value="gerente">Gerente</option><option value="admin">Admin</option></select></div>
       </div>
       <div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap;align-items:center">
         <button onclick="adicionarUsuario()" style="background:var(--gdim2);border:1px solid rgba(74,222,128,.3);color:var(--green);border-radius:var(--r);padding:8px 16px;font-family:var(--mono);font-size:11px;cursor:pointer">+ Adicionar</button>
@@ -429,7 +430,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <div class="edit-form-row"><div class="form-label">Nome</div><input class="sinp" id="edit-nome"></div>
     <div class="edit-form-row"><div class="form-label">Código vendedor</div><input class="sinp" id="edit-codigo"></div>
     <div class="edit-form-row"><div class="form-label">Nova senha</div><input class="sinp" id="edit-senha" type="text"></div>
-    <div class="edit-form-row"><div class="form-label">Tipo</div><select class="sinp" id="edit-role" style="cursor:pointer"><option value="vendedor">Vendedor</option><option value="gerente">Gerente</option><option value="admin">Admin</option></select></div>
+    <div class="edit-form-row"><div class="form-label">Tipo</div><select class="sinp" id="edit-role"><option value="vendedor">Vendedor</option><option value="gerente">Gerente</option><option value="admin">Admin</option></select></div>
     <div style="display:flex;gap:8px;margin-top:6px">
       <button onclick="salvarEdicao()" style="background:var(--green);color:#0d0f0e;border:none;border-radius:var(--r);padding:9px 18px;font-family:var(--mono);font-size:12px;font-weight:600;cursor:pointer">Salvar</button>
       <button onclick="fecharEdit()" style="background:none;border:1px solid var(--line2);color:var(--text2);border-radius:var(--r);padding:9px 14px;font-family:var(--mono);font-size:11px;cursor:pointer">Cancelar</button>
@@ -528,104 +529,143 @@ let arquivoPDFSelecionado=null;
 function chaveStorage(){return `dt_dados_${usuarioAtual.usuario}`;}
 function salvarEstado(){if(!usuarioAtual)return;try{localStorage.setItem(chaveStorage(),JSON.stringify(ESTADO));}catch(e){}}
 
-function carregarEstadoVendedor(username){
-  const salvo=localStorage.getItem(`dt_dados_${username}`);
-  if(salvo){try{const p=JSON.parse(salvo);if(p.clientes&&p.meses)return p;}catch(e){}}
+
+function carregarEstadoVendedor(u){
+  try{const s=localStorage.getItem('dt_dados_'+u);if(s){const p=JSON.parse(s);if(p&&p.meses&&p.clientes)return p;}}catch(e){}
   return{meses:{},clientes:{}};
 }
+function salvarEstadoVendedor(u,st){
+  try{localStorage.setItem('dt_dados_'+u,JSON.stringify(st));}catch(e){}
+}
 function carregarDadosCombinados(){
-  const combined={meses:{},clientes:{}};
+  // Lê TODAS as chaves dt_dados_* do localStorage — funciona mesmo sem lista de usuários
+  const C={meses:{},clientes:{}};
   Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
     try{
       const st=JSON.parse(localStorage.getItem(key));
-      if(!st||!st.clientes||!st.meses)return;
+      if(!st||!st.meses||!st.clientes)return;
       Object.entries(st.meses).forEach(([mk,m])=>{
-        if(!combined.meses[mk])combined.meses[mk]={total:0,pedidos:0,meta:0,carregado:false};
-        combined.meses[mk].total=Math.round((combined.meses[mk].total+(m.total||0))*100)/100;
-        combined.meses[mk].pedidos=(combined.meses[mk].pedidos||0)+(m.pedidos||0);
-        if(m.carregado)combined.meses[mk].carregado=true;
+        if(!C.meses[mk])C.meses[mk]={total:0,pedidos:0,meta:0,carregado:false};
+        C.meses[mk].total=+(C.meses[mk].total+(m.total||0)).toFixed(2);
+        C.meses[mk].pedidos=(C.meses[mk].pedidos||0)+(m.pedidos||0);
+        if(m.carregado)C.meses[mk].carregado=true;
       });
       Object.entries(st.clientes).forEach(([cod,c])=>{
-        if(!combined.clientes[cod])combined.clientes[cod]={nome:c.nome||''};
-        else if((c.nome||'').length>(combined.clientes[cod].nome||'').length)combined.clientes[cod].nome=c.nome;
-        Object.entries(c).forEach(([k,v])=>{if(k!=='nome')combined.clientes[cod][k]=Math.round(((combined.clientes[cod][k]||0)+v)*100)/100;});
+        if(!C.clientes[cod])C.clientes[cod]={nome:c.nome||''};
+        else if((c.nome||'').length>(C.clientes[cod].nome||'').length)C.clientes[cod].nome=c.nome;
+        Object.entries(c).forEach(([k,v])=>{if(k!=='nome')C.clientes[cod][k]=+((C.clientes[cod][k]||0)+v).toFixed(2);});
       });
     }catch(e){}
   });
-  return combined;
+  return C;
 }
 function carregarDadosAtivos(){
-  if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();}
-  else{
+  if(vendedorVizualizado==='todos'){
+    ESTADO=carregarDadosCombinados();
+  }else{
     const target=vendedorVizualizado||usuarioAtual.usuario;
-    ESTADO={meses:{},clientes:{}};
-    const salvo=localStorage.getItem(`dt_dados_${target}`);
-    if(salvo){try{const p=JSON.parse(salvo);if(p.clientes&&p.meses)ESTADO=p;}catch(e){}}
-    else if(target===usuarioAtual.usuario&&usuarioAtual.dadosIniciais){inicializarDadosAgner();salvarEstado();}
+    ESTADO=carregarEstadoVendedor(target);
+    if(!Object.keys(ESTADO.meses).length&&target===usuarioAtual.usuario&&usuarioAtual.dadosIniciais){inicializarDadosAgner();salvarEstado();}
   }
   renderPills();renderFiltros();
 }
 function atualizarSeletorVendedores(){
   const sel=document.getElementById('vendor-sel-global');
   const ivs=document.getElementById('import-vendor-sel');
-  const users=getUsuarios();
-  if(sel){sel.innerHTML='<option value="todos">Todos os Vendedores</option>';users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=`${u.nome}${u.codigo?' (Cód.'+u.codigo+')':''}`;sel.appendChild(o);});sel.value=vendedorVizualizado||'todos';}
-  if(ivs){ivs.innerHTML='<option value="">— selecione o vendedor —</option>';users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=`${u.nome}${u.codigo?' (Cód.'+u.codigo+')':''}`;ivs.appendChild(o);});}
-  const _vbi=document.getElementById('vendor-bar-info');if(_vbi){const v=vendedorVizualizado;_vbi.textContent=v&&v!=='todos'?v:'';}
+  const users=getUsuarios().filter(u=>u.senha!=='__ext__');
+  if(sel){
+    sel.innerHTML='<option value="todos">Todos os Vendedores</option>';
+    users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'');sel.appendChild(o);});
+    sel.value=vendedorVizualizado||'todos';
+  }
+  if(ivs){
+    ivs.innerHTML='<option value="">— selecione o vendedor —</option>';
+    users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'');ivs.appendChild(o);});
+  }
+  const vbi=document.getElementById('vendor-bar-info');
+  if(vbi)vbi.textContent=(vendedorVizualizado&&vendedorVizualizado!=='todos')?vendedorVizualizado:'';
 }
 function trocarVendedor(val){
   vendedorVizualizado=val||'todos';
   const sel=document.getElementById('vendor-sel-global');if(sel)sel.value=vendedorVizualizado;
-  const _vbi=document.getElementById('vendor-bar-info');if(_vbi)_vbi.textContent=vendedorVizualizado!=='todos'?vendedorVizualizado:'';
+  const vbi=document.getElementById('vendor-bar-info');if(vbi)vbi.textContent=vendedorVizualizado!=='todos'?vendedorVizualizado:'';
   carregarDadosAtivos();buildDashboard();
 }
+
+// ── Sync server ──────────────────────────────────────────────────────────────
 async function pushSalesData(username,estado){
-  try{await fetch('/api/public/sales-push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:username,estado})});}catch(e){}
+  try{
+    await fetch('/api/public/sales-push',{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({usuario:username,estado})});
+  }catch(e){}
+}
+async function publicarDados(){
+  // Vendedor publica dados existentes ao servidor manualmente
+  const btn=document.getElementById('nav-publicar');
+  if(btn){btn.textContent='📤 Publicando...';btn.style.pointerEvents='none';}
+  const st=carregarEstadoVendedor(usuarioAtual.usuario);
+  if(Object.keys(st.meses).length===0){
+    if(btn){btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';}
+    alert('Nenhum dado encontrado. Importe seus PDFs primeiro.');return;
+  }
+  await pushSalesData(usuarioAtual.usuario,st);
+  if(btn){btn.innerHTML='<span class="nav-ic">✓</span>Publicado!';setTimeout(()=>{btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';},2000);}
 }
 async function pushUsuariosParaServidor(){
-  try{const lista=getUsuarios().map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});}catch(e){}
+  try{
+    const lista=getUsuarios().filter(u=>u.senha!=='__ext__').map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));
+    await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});
+  }catch(e){}
 }
 async function sincronizarDados(){
   const btn=document.getElementById('sync-btn');
   if(btn){btn.textContent='⟳ ...';btn.disabled=true;}
   let ok=false;
   try{
+    // 1. Puxa roles atualizados
     const ur=await fetch('/api/public/users');
     if(ur.ok){
       const lista=await ur.json();
-      if(Array.isArray(lista)&&lista.length>0){
+      if(Array.isArray(lista)){
         const locals=getUsuarios();let changed=0;
         lista.forEach(srv=>{
           const idx=locals.findIndex(l=>l.usuario===srv.usuario);
-          if(idx>=0&&(locals[idx].role!==srv.role||locals[idx].nome!==srv.nome||locals[idx].codigo!==srv.codigo)){
-            locals[idx]={...locals[idx],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};changed++;
+          if(idx>=0){
+            const u=locals[idx];
+            if(u.role!==srv.role||u.nome!==srv.nome||u.codigo!==srv.codigo){
+              locals[idx]={...u,role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};changed++;
+            }
+          }else if(srv.usuario){
+            // Usuário conhecido no servidor mas não localmente — adiciona como externo
+            locals.push({usuario:srv.usuario,nome:srv.nome,codigo:srv.codigo||'',role:srv.role,admin:srv.role==='admin',senha:'__ext__',dadosIniciais:false});
+            changed++;
           }
         });
-        if(changed>0){salvarUsuarios(locals);if(usuarioAtual){const me=locals.find(l=>l.usuario===usuarioAtual.usuario);if(me)usuarioAtual=me;}}
+        if(changed){salvarUsuarios(locals);if(usuarioAtual){const me=locals.find(l=>l.usuario===usuarioAtual.usuario);if(me)usuarioAtual=me;}}
       }
     }
+    // 2. Puxa dados de vendas
     const sr=await fetch('/api/public/sales');
     if(sr.ok){
       const allSales=await sr.json();
-      const locals=getUsuarios();let usersChanged=false;
       Object.entries(allSales).forEach(([username,d])=>{
         if(d&&d.estado&&d.estado.meses&&d.estado.clientes){
-          localStorage.setItem(`dt_dados_${username}`,JSON.stringify(d.estado));
-          if(!locals.find(l=>l.usuario===username)){
-            const meta=d.meta||{};
-            locals.push({usuario:username,nome:meta.nome||username.toUpperCase(),codigo:meta.codigo||'',role:meta.role||'vendedor',admin:false,senha:'__sync__',dadosIniciais:false});
-            usersChanged=true;
-          }
+          salvarEstadoVendedor(username,d.estado);
         }
       });
-      if(usersChanged)salvarUsuarios(locals);
     }
     ok=true;
-    if(isGerente()){atualizarSeletorVendedores();document.getElementById('nav-vendedores').style.display='flex';document.getElementById('vendor-bar').style.display='flex';const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='block';}
+    if(isGerente()){
+      atualizarSeletorVendedores();
+      document.getElementById('nav-vendedores').style.display='flex';
+      document.getElementById('vendor-bar').style.display='flex';
+      const ivb=document.getElementById('import-vendor-box');if(ivb)ivb.style.display='block';
+    }
     carregarDadosAtivos();buildDashboard();
     if(isAdmin())renderAdminPanel();
-  }catch(e){}
-  if(btn){btn.textContent=ok?'✓ Sync':'✗ Sync';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},1800);}
+  }catch(e){console.error('Sync error:',e);}
+  if(btn){btn.textContent=ok?'✓ Sync':'✗ Erro';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},2000);}
 }
 function carregarDadosUsuario(){
   ESTADO={meses:{},clientes:{}};
@@ -675,71 +715,77 @@ async function fazerLogin(){
   const s=document.getElementById('l-pass').value;
   const erroEl=document.getElementById('l-erro');
   erroEl.textContent='';
-  let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
+  // 1. Tenta login local (método principal)
+  let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s&&x.senha!=='__ext__');
+  // 2. Fallback: tenta servidor (para usuários registrados via admin panel)
   if(!found){
     try{
-      const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});
-      if(sr.ok){
-        const sd=await sr.json();
-        if(sd.token&&sd.user){
-          sessionStorage.setItem('dt_srv_token',sd.token);
-          const su=sd.user;
+      const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});
+      if(r.ok){
+        const d=await r.json();
+        if(d.token&&d.user){
+          sessionStorage.setItem('dt_srv_token',d.token);
+          const su=d.user;
           const newU={usuario:su.id,nome:su.nome,codigo:su.cod||'',senha:s,role:su.role,admin:su.role==='admin',dadosIniciais:false};
           const locals=getUsuarios();locals.push(newU);salvarUsuarios(locals);
           found=newU;
         }
       }
     }catch(e){}
-    if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
   }
+  if(!found){
+    erroEl.textContent='Usuário ou senha incorretos. Peça o link de acesso ao administrador.';
+    document.getElementById('l-pass').value='';
+    return;
+  }
+  // 3. Puxa role atualizado do servidor (silencioso)
   try{
-    const sr=await fetch('/api/public/users');
-    if(sr.ok){
-      const lista=await sr.json();
-      if(Array.isArray(lista)&&lista.length>0){
-        const locals=getUsuarios();let changed=false;
+    const r=await fetch('/api/public/users');
+    if(r.ok){
+      const lista=await r.json();
+      if(Array.isArray(lista)){
+        const locals=getUsuarios();let ch=false;
         lista.forEach(srv=>{
-          const idx=locals.findIndex(l=>l.usuario===srv.usuario);
-          if(idx>=0&&(locals[idx].role!==srv.role||locals[idx].nome!==srv.nome||locals[idx].codigo!==srv.codigo)){
-            locals[idx]={...locals[idx],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};
-            changed=true;
+          const i=locals.findIndex(l=>l.usuario===srv.usuario);
+          if(i>=0&&(locals[i].role!==srv.role||locals[i].nome!==srv.nome)){
+            locals[i]={...locals[i],role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};ch=true;
           }
         });
-        if(changed){salvarUsuarios(locals);found=getUsuarios().find(x=>x.usuario===u&&x.senha===s)||found;}
+        if(ch){salvarUsuarios(locals);found=locals.find(l=>l.usuario===u&&l.senha===s)||found;}
       }
     }
   }catch(e){}
-  try{const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});if(sr.ok){const sd=await sr.json();if(sd.token)sessionStorage.setItem('dt_srv_token',sd.token);}}catch(e){}
+  // 4. Token de servidor (para /api/parse-text)
+  try{const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});if(r.ok){const d=await r.json();if(d.token)sessionStorage.setItem('dt_srv_token',d.token);}}catch(e){}
+  // 5. Aplica sessão
   usuarioAtual=found;
   sessionStorage.setItem('dt_sessao',found.usuario);
   const _role=getRole(found);
-  const roleLabel=_role==='admin'?'Admin':_role==='gerente'?'Gerente':'Vendedor';
   document.getElementById('user-nome-badge').textContent=found.nome;
-  document.getElementById('header-sub').textContent=`${roleLabel} ${found.codigo||'—'} · ${found.nome} · 2026`;
-  document.title=`Douratubos — ${found.nome} 2026`;
+  document.getElementById('header-sub').textContent=(_role==='admin'?'Admin':_role==='gerente'?'Gerente':'Vendedor')+' '+( found.codigo||'—')+' · '+found.nome+' · 2026';
+  document.title='Douratubos — '+found.nome+' 2026';
   document.getElementById('nav-admin').style.display=_role==='admin'?'flex':'none';
-  document.getElementById('nav-vendedores').style.display=isGerente()?'flex':'none';
-  const vbar=document.getElementById('vendor-bar');
+  const nvend=document.getElementById('nav-vendedores');if(nvend)nvend.style.display=isGerente()?'flex':'none';
+  const npub=document.getElementById('nav-publicar');if(npub)npub.style.display=(!isGerente())?'flex':'none';
+  const vbar=document.getElementById('vendor-bar');if(vbar)vbar.style.display=isGerente()?'flex':'none';
   if(isGerente()){
-    vbar.style.display='flex';vendedorVizualizado='todos';
+    vendedorVizualizado='todos';
     atualizarSeletorVendedores();
-    const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='block';
+    const ivb=document.getElementById('import-vendor-box');if(ivb)ivb.style.display='block';
   }else{
-    vbar.style.display='none';vendedorVizualizado=found.usuario;
-    const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='none';
+    vendedorVizualizado=found.usuario;
+    const ivb=document.getElementById('import-vendor-box');if(ivb)ivb.style.display='none';
+    // Vendedor: publica dados existentes ao servidor
+    const _st=carregarEstadoVendedor(found.usuario);
+    if(Object.keys(_st.meses).length>0)pushSalesData(found.usuario,_st);
   }
   document.getElementById('login-screen').style.display='none';
   document.getElementById('app').style.display='block';
   carregarDadosAtivos();
   buildDashboard();
   resetarNavegacao();
-  // Vendedor: envia dados existentes ao servidor para gerente ver
-  if(!isGerente()){
-    const _raw=localStorage.getItem(`dt_dados_${found.usuario}`);
-    if(_raw){try{const _st=JSON.parse(_raw);if(_st&&_st.meses&&_st.clientes)pushSalesData(found.usuario,_st);}catch(e){}}
-  }
-  // Gerente/admin: puxa dados de todos do servidor
-  if(isGerente()){sincronizarDados();}
+  // Gerente/admin: sincroniza automaticamente
+  if(isGerente())sincronizarDados();
 }
 
 function fazerLogout(){
@@ -756,7 +802,7 @@ function fazerLogout(){
 
 function verificarSessao(){
   const salvo=sessionStorage.getItem('dt_sessao');
-  if(salvo){const found=getUsuarios().find(x=>x.usuario===salvo);if(found){document.getElementById('l-user').value=found.usuario;document.getElementById('l-pass').value=found.senha;fazerLogin().catch(()=>{});return;}}
+  if(salvo){const found=getUsuarios().find(x=>x.usuario===salvo);if(found&&found.senha!=='__ext__'){document.getElementById('l-user').value=found.usuario;document.getElementById('l-pass').value=found.senha;fazerLogin().catch(()=>{});return;}}
   setTimeout(()=>document.getElementById('l-user').focus(),100);
 }
 
@@ -1071,7 +1117,7 @@ async function processarComClaude(){
     addLog(`📤 Enviando ${todasLinhas.length} linhas para o servidor...`,'info');
     const _token=sessionStorage.getItem('dt_srv_token')||'';
     const _ivs=document.getElementById('import-vendor-sel');
-    const _targetUser=(_ivs&&_ivs.value)?_ivs.value:null;
+    const _tgt=_ivs&&_ivs.value?_ivs.value:null;
     const resp=await fetch('/api/parse-text',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_token},body:JSON.stringify({lines:todasLinhas})});
     aiStep(2);setProgress(70);
     const data=await resp.json();
@@ -1079,17 +1125,17 @@ async function processarComClaude(){
     aiStep(3);setProgress(90);
     addLog(`✓ Período: ${data.label}`,'ok');
     addLog(`✓ ${Object.keys(data.clientes).length} clientes · R$ ${(data.total||0).toLocaleString('pt-BR',{minimumFractionDigits:2})}`,'ok');
-    if(_targetUser&&_targetUser!==usuarioAtual.usuario){
-      const _tst=carregarEstadoVendedor(_targetUser);const _tmeses=Object.keys(_tst.meses);const _mk=data.mes;
-      Object.values(_tst.clientes).forEach(c=>{if(c[_mk]===undefined)c[_mk]=0;});
+    if(_tgt&&_tgt!==usuarioAtual.usuario){
+      const _ts=carregarEstadoVendedor(_tgt);const _mk=data.mes;
+      Object.values(_ts.clientes).forEach(c=>{if(c[_mk]===undefined)c[_mk]=0;});
       Object.entries(data.clientes||{}).forEach(([cod,c])=>{
-        if(!_tst.clientes[cod]){_tst.clientes[cod]={nome:c.nome||''};_tmeses.forEach(m=>{_tst.clientes[cod][m]=0;});}
-        else if((c.nome||'').length>(_tst.clientes[cod].nome||'').length)_tst.clientes[cod].nome=c.nome;
-        _tst.clientes[cod][_mk]=Math.round((c.total||0)*100)/100;
+        if(!_ts.clientes[cod]){_ts.clientes[cod]={nome:c.nome||''};Object.keys(_ts.meses).forEach(m=>{_ts.clientes[cod][m]=0;});}
+        else if((c.nome||'').length>(_ts.clientes[cod].nome||'').length)_ts.clientes[cod].nome=c.nome;
+        _ts.clientes[cod][_mk]=+((c.total||0)).toFixed(2);
       });
-      _tst.meses[_mk]={total:data.total||0,pedidos:data.pedidos||0,meta:0,carregado:true};
-      localStorage.setItem(`dt_dados_${_targetUser}`,JSON.stringify(_tst));
-      await pushSalesData(_targetUser,_tst);
+      _ts.meses[_mk]={total:data.total||0,pedidos:data.pedidos||0,meta:0,carregado:true};
+      salvarEstadoVendedor(_tgt,_ts);
+      await pushSalesData(_tgt,_ts);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
     }else{
       const ok=importarJSONdoClaude(data);if(!ok)throw new Error('Erro ao salvar dados.');
@@ -1177,24 +1223,24 @@ async function carregarPDF(file){
     const totalCalc=Object.values(acumulado).reduce((s,c)=>s+c.total,0);
     if(totalDeclarado>0){const diff=Math.abs(totalCalc-totalDeclarado);if(diff>500)addLog(`⚠ Diferença R$ ${diff.toFixed(2)} vs declarado`,'warn');else addLog('✓ Conferência OK','ok');}
     const _livs=document.getElementById('import-vendor-sel');
-    const _ltgt=(_livs&&_livs.value)?_livs.value:null;
+    const _ltgt=_livs&&_livs.value?_livs.value:null;
     if(_ltgt&&_ltgt!==usuarioAtual.usuario){
-      const _tst=carregarEstadoVendedor(_ltgt);const _tmeses=Object.keys(_tst.meses);
-      Object.values(_tst.clientes).forEach(c=>{if(c[info.mes]===undefined)c[info.mes]=0;});
+      const _ts=carregarEstadoVendedor(_ltgt);const _tmk=Object.keys(_ts.meses);
+      Object.values(_ts.clientes).forEach(c=>{if(c[info.mes]===undefined)c[info.mes]=0;});
       Object.entries(acumulado).forEach(([cod,c])=>{
-        if(!_tst.clientes[cod]){_tst.clientes[cod]={nome:c.nome};_tmeses.forEach(m=>{_tst.clientes[cod][m]=0;});}
-        else if(c.nome&&c.nome.length>(_tst.clientes[cod].nome||'').length)_tst.clientes[cod].nome=c.nome;
-        _tst.clientes[cod][info.mes]=Math.round(c.total*100)/100;
+        if(!_ts.clientes[cod]){_ts.clientes[cod]={nome:c.nome};_tmk.forEach(m=>{_ts.clientes[cod][m]=0;});}
+        else if(c.nome&&c.nome.length>(_ts.clientes[cod].nome||'').length)_ts.clientes[cod].nome=c.nome;
+        _ts.clientes[cod][info.mes]=+c.total.toFixed(2);
       });
-      _tst.meses[info.mes]={total:Math.round(totalCalc*100)/100,pedidos:nLanc,meta:0,carregado:true};
-      localStorage.setItem(`dt_dados_${_ltgt}`,JSON.stringify(_tst));
-      await pushSalesData(_ltgt,_tst);
+      _ts.meses[info.mes]={total:+totalCalc.toFixed(2),pedidos:nLanc,meta:0,carregado:true};
+      salvarEstadoVendedor(_ltgt,_ts);
+      await pushSalesData(_ltgt,_ts);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
     }else{
       aplicarDadosMes(info.mes,acumulado,totalCalc,nLanc,0);
       await pushSalesData(usuarioAtual.usuario,ESTADO);
     }
-    setStatus(`✓ ${info.label} importado! ${Object.keys(acumulado).length} clientes`,'ok');
+    setStatus('✓ '+info.label+' importado! '+Object.keys(acumulado).length+' clientes','ok');
     addLog('✅ Concluído!','ok');
   }catch(err){setStatus('Erro: '+err.message,'err');addLog('✗ '+err.message,'err');console.error(err);}
 }
@@ -1275,11 +1321,11 @@ function resetarDados(){
 function renderAdminPanel(){
   if(!isAdmin())return;
   const tbody=document.getElementById('admin-tbody');tbody.innerHTML='';
-  getUsuarios().filter(u=>u.senha!=='__sync__').forEach(u=>{
+  getUsuarios().filter(u=>u.senha!=='__ext__').forEach(u=>{
     const isSelf=u.usuario===usuarioAtual.usuario;const r=getRole(u);
-    const roleColor=r==='admin'?'var(--green)':r==='gerente'?'#60a5fa':'var(--text3)';
+    const rc=r==='admin'?'var(--green)':r==='gerente'?'#60a5fa':'var(--text3)';
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td><span style="color:var(--text)">${u.usuario}</span></td><td>${u.nome}</td><td style="color:var(--text3)">${u.codigo||'—'}</td><td><span style="letter-spacing:2px;color:var(--text3)">••••••</span> <span style="color:var(--text3);font-size:9px">(${u.senha.length} char)</span></td><td><span style="color:${roleColor};font-family:var(--mono);font-size:10px;text-transform:uppercase">${r}</span></td><td style="text-align:center;display:flex;gap:6px;justify-content:center"><button class="btn-sm" onclick="abrirEdit('${u.usuario}')">✎</button>${isSelf?'':`<button class="btn-sm" onclick="gerarLinkParaUsuario('${u.usuario}')">🔗 Link</button>`}${isSelf?'':`<button class="btn-sm danger" onclick="excluirUsuario('${u.usuario}')">✕</button>`}</td>`;
+    tr.innerHTML='<td><span style="color:var(--text)">'+u.usuario+'</span></td><td>'+u.nome+'</td><td style="color:var(--text3)">'+( u.codigo||'—')+'</td><td><span style="letter-spacing:2px;color:var(--text3)">••••••</span></td><td><span style="color:'+rc+';font-family:var(--mono);font-size:10px;text-transform:uppercase">'+r+'</span></td><td style="text-align:center;display:flex;gap:6px;justify-content:center"><button class="btn-sm" onclick="abrirEdit(\''+u.usuario+'\')" >✎</button>'+(isSelf?'':'<button class="btn-sm" onclick="gerarLinkParaUsuario(\''+u.usuario+'\')" >🔗</button><button class="btn-sm danger" onclick="excluirUsuario(\''+u.usuario+'\')" >✕</button>')+'</td>';
     tbody.appendChild(tr);
   });
   document.getElementById('admin-msg').textContent='';
@@ -1297,7 +1343,7 @@ async function adicionarUsuario(){
   const novoUser={usuario,senha,codigo,nome,role,admin:role==='admin',dadosIniciais:false};
   lista.push(novoUser);salvarUsuarios(lista);
   const _at=sessionStorage.getItem('dt_srv_token')||'';
-  if(_at){try{await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:usuario,nome,senha,role,cod:codigo})});}catch(e){}}
+  if(_at){try{fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:usuario,nome,senha,role,cod:codigo})});}catch(e){}}
   const link=gerarLinkConvite(novoUser);
   document.getElementById('invite-link-text').textContent=link;
   document.getElementById('invite-result').style.display='block';
@@ -1306,10 +1352,10 @@ async function adicionarUsuario(){
   msgEl.style.color='var(--green)';msgEl.textContent=`✓ "${usuario}" criado!`;
   renderAdminPanel();pushUsuariosParaServidor();
 }
-function gerarLinkConvite(u){const payload=btoa(JSON.stringify({usuario:u.usuario,senha:u.senha,nome:u.nome,codigo:u.codigo||'',dadosIniciais:false}));return `${location.origin}${location.pathname}#convite=${payload}`;}
+function gerarLinkConvite(u){const payload=btoa(unescape(encodeURIComponent(JSON.stringify({usuario:u.usuario,senha:u.senha,nome:u.nome,codigo:u.codigo||'',role:getRole(u),dadosIniciais:false}))));return location.origin+location.pathname+'#convite='+payload;}
 function copiarLinkConvite(){navigator.clipboard.writeText(document.getElementById('invite-link-text').textContent).then(()=>{const el=document.getElementById('link-copied');el.style.display='inline';setTimeout(()=>el.style.display='none',2500);});}
 function gerarLinkParaUsuario(usuario){const u=getUsuarios().find(x=>x.usuario===usuario);if(!u)return;const link=gerarLinkConvite(u);document.getElementById('invite-link-text').textContent=link;document.getElementById('invite-result').style.display='block';document.getElementById('admin-msg').style.color='var(--text2)';document.getElementById('admin-msg').textContent=`Link gerado para "${usuario}"`;document.getElementById('invite-result').scrollIntoView({behavior:'smooth'});}
-async function excluirUsuario(usuario){if(!confirm(`Excluir "${usuario}"?`))return;salvarUsuarios(getUsuarios().filter(u=>u.usuario!==usuario));localStorage.removeItem(`dt_dados_${usuario}`);renderAdminPanel();pushUsuariosParaServidor();const _at=sessionStorage.getItem('dt_srv_token')||'';if(_at){try{await fetch(`/api/users/${usuario}`,{method:'DELETE',headers:{'x-auth-token':_at}});}catch(e){}}}
+async function excluirUsuario(usuario){if(!confirm('Excluir "'+usuario+'"?'))return;salvarUsuarios(getUsuarios().filter(u=>u.usuario!==usuario));localStorage.removeItem('dt_dados_'+usuario);renderAdminPanel();pushUsuariosParaServidor();const _at=sessionStorage.getItem('dt_srv_token')||'';if(_at){try{await fetch('/api/users/'+usuario,{method:'DELETE',headers:{'x-auth-token':_at}});}catch(e){}}}
 function abrirEdit(usuario){const u=getUsuarios().find(x=>x.usuario===usuario);if(!u)return;document.getElementById('edit-original').value=usuario;document.getElementById('edit-usuario').value=u.usuario;document.getElementById('edit-nome').value=u.nome;document.getElementById('edit-codigo').value=u.codigo||'';document.getElementById('edit-senha').value=u.senha;const er=document.getElementById('edit-role');if(er)er.value=getRole(u);document.getElementById('edit-msg').textContent='';document.getElementById('edit-overlay').classList.add('open');}
 function fecharEdit(){document.getElementById('edit-overlay').classList.remove('open');}
 async function salvarEdicao(){
@@ -1325,13 +1371,14 @@ async function salvarEdicao(){
   if(novoUsuario!==original&&lista.find(u=>u.usuario===novoUsuario)){msgEl.style.color='var(--red)';msgEl.textContent='Em uso.';return;}
   if(novoUsuario!==original){const d=localStorage.getItem(`dt_dados_${original}`);if(d)localStorage.setItem(`dt_dados_${novoUsuario}`,d);localStorage.removeItem(`dt_dados_${original}`);if(original===usuarioAtual.usuario)sessionStorage.setItem('dt_sessao',novoUsuario);}
   const editRole=(document.getElementById('edit-role')?.value)||getRole(lista[idx]);
-  lista[idx]={...lista[idx],usuario:novoUsuario,nome,codigo,senha,role:editRole,admin:editRole==='admin'};salvarUsuarios(lista);pushUsuariosParaServidor();
+  lista[idx]={...lista[idx],usuario:novoUsuario,nome,codigo,senha,role:editRole,admin:editRole==='admin'};salvarUsuarios(lista);
+  pushUsuariosParaServidor();
   const _at=sessionStorage.getItem('dt_srv_token')||'';
   if(_at){try{
     if(novoUsuario!==original){
-      await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:novoUsuario,nome,senha,role:editRole,cod:codigo})}).catch(()=>{});
-      await fetch(`/api/users/${original}`,{method:'DELETE',headers:{'x-auth-token':_at}}).catch(()=>{});
-    }else{await fetch(`/api/users/${original}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({nome,senha,role:editRole,cod:codigo})});}
+      fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:novoUsuario,nome,senha,role:editRole,cod:codigo})});
+      fetch('/api/users/'+original,{method:'DELETE',headers:{'x-auth-token':_at}});
+    }else{fetch('/api/users/'+original,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({nome,senha,role:editRole,cod:codigo})});}
   }catch(e){}}
   if(original===usuarioAtual.usuario){usuarioAtual=lista[idx];document.getElementById('user-nome-badge').textContent=usuarioAtual.nome;document.getElementById('header-sub').textContent=`Vendedor ${usuarioAtual.codigo||'—'} · ${usuarioAtual.nome} · 2026`;}
   msgEl.style.color='var(--green)';msgEl.textContent='✓ Salvo!';setTimeout(fecharEdit,800);renderAdminPanel();
@@ -1345,7 +1392,7 @@ function processarConvite(){
   try{
     const payload=JSON.parse(atob(hash.slice(9)));if(!payload.usuario||!payload.senha)return false;
     let lista=getUsuarios();const idx=lista.findIndex(u=>u.usuario===payload.usuario);
-    const novoUser={usuario:payload.usuario,senha:payload.senha,nome:payload.nome||payload.usuario.toUpperCase(),codigo:payload.codigo||'',admin:false,dadosIniciais:!!payload.dadosIniciais};
+    const novoUser={usuario:payload.usuario,senha:payload.senha,nome:payload.nome||payload.usuario.toUpperCase(),codigo:payload.codigo||'',role:payload.role||'vendedor',admin:payload.role==='admin',dadosIniciais:!!payload.dadosIniciais};
     if(idx>=0)lista[idx]=novoUser;else lista.push(novoUser);
     salvarUsuarios(lista);
     document.getElementById('invite-user-info').textContent=`${novoUser.nome} · @${novoUser.usuario}`;
