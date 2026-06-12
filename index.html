@@ -572,15 +572,44 @@ function carregarDadosAtivos(){
 function atualizarSeletorVendedores(){
   const sel=document.getElementById('vendor-sel-global');
   const ivs=document.getElementById('import-vendor-sel');
-  const users=getUsuarios().filter(u=>u.senha!=='__ext__');
+  // Pega todos os usuarios locais (incluindo __ext__ do sync)
+  const allUsers=getUsuarios();
+  // Também inclui qualquer dt_dados_* no localStorage que não esteja na lista
+  const seenUids=new Set(allUsers.map(u=>u.usuario));
+  Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
+    const uid=key.replace('dt_dados_','');
+    if(!uid||seenUids.has(uid))return;
+    // Tem dados mas não está na lista de usuários — adiciona como anônimo
+    allUsers.push({usuario:uid,nome:uid.toUpperCase(),codigo:'',role:'vendedor',senha:'__ext__',dadosIniciais:false});
+    seenUids.add(uid);
+  });
+  // Filtra somente vendedores reais (não mostra o próprio gerente, nem dados vazios)
+  const vendedores=allUsers.filter(u=>{
+    if(!u.usuario)return false;
+    // Inclui se tiver dados no localStorage
+    const st=localStorage.getItem('dt_dados_'+u.usuario);
+    if(!st)return false;
+    try{const p=JSON.parse(st);return p&&p.meses&&Object.keys(p.meses).length>0;}catch(e){return false;}
+  });
   if(sel){
     sel.innerHTML='<option value="todos">Todos os Vendedores</option>';
-    users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'');sel.appendChild(o);});
+    vendedores.forEach(u=>{
+      const o=document.createElement('option');
+      o.value=u.usuario;
+      const st=JSON.parse(localStorage.getItem('dt_dados_'+u.usuario)||'{}');
+      const total=Object.values(st.meses||{}).reduce((s,m)=>s+(m.total||0),0);
+      const brl=v=>'R$'+Math.round(v).toLocaleString('pt-BR');
+      o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'')+(total>0?' · '+brl(total):'');
+      sel.appendChild(o);
+    });
     sel.value=vendedorVizualizado||'todos';
+    if(sel.value!==(vendedorVizualizado||'todos'))sel.value='todos';
   }
   if(ivs){
+    // Para import: mostra todos os usuarios reais (senha != __ext__ ou que o admin criou)
+    const paraImport=allUsers.filter(u=>u.usuario&&u.senha!=='__ext__'&&getRole(u)!=='admin'&&getRole(u)!=='gerente');
     ivs.innerHTML='<option value="">— selecione o vendedor —</option>';
-    users.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'');ivs.appendChild(o);});
+    paraImport.forEach(u=>{const o=document.createElement('option');o.value=u.usuario;o.textContent=u.nome+(u.codigo?' ('+u.codigo+')':'');ivs.appendChild(o);});
   }
   const vbi=document.getElementById('vendor-bar-info');
   if(vbi)vbi.textContent=(vendedorVizualizado&&vendedorVizualizado!=='todos')?vendedorVizualizado:'';
@@ -681,6 +710,7 @@ async function sincronizarDados(){
     }
     ok=true;
     if(isGerente()){
+      // Atualiza seletor APÓS escrever dados no localStorage (agora lista vendedores com dados)
       atualizarSeletorVendedores();
       document.getElementById('nav-vendedores').style.display='flex';
       document.getElementById('vendor-bar').style.display='flex';
