@@ -1,4 +1,4 @@
-// server.js v15 — sync completo: usuarios + dados de vendas
+// server.js v16 — sync completo: usuarios + dados de vendas
 require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
@@ -175,8 +175,8 @@ app.get('/api/users', authMw, requireRole('admin'), (req, res) => {
 app.post('/api/users', authMw, requireRole('admin'), (req, res) => {
   const { id, nome, senha, role, cod } = req.body || {};
   if (!id || !nome || !senha) return res.status(400).json({ error: 'campos obrigatorios' });
-  if (users[id]) return res.status(409).json({ error: 'ID ja existe' });
   if (!['admin','gerente','vendedor'].includes(role)) return res.status(400).json({ error: 'role invalido' });
+  // Upsert: cria ou atualiza (admin pode re-registrar usuario de outro computador)
   users[id] = { id, nome: nome.toUpperCase(), senha, role, cod: cod || null };
   saveUsers();
   res.json({ ok: true });
