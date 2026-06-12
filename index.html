@@ -695,8 +695,24 @@ async function fazerLogin(){
   const s=document.getElementById('l-pass').value;
   const erroEl=document.getElementById('l-erro');
   let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
-  if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
   erroEl.textContent='';
+  // Se não existe localmente, tenta login no servidor (usuário criado em outro computador)
+  if(!found){
+    try{
+      const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});
+      if(sr.ok){
+        const sd=await sr.json();
+        if(sd.token&&sd.user){
+          sessionStorage.setItem('dt_srv_token',sd.token);
+          const su=sd.user;
+          const newU={usuario:su.id,nome:su.nome,codigo:su.cod||'',senha:s,role:su.role,admin:su.role==='admin',dadosIniciais:false};
+          const locals=getUsuarios();locals.push(newU);salvarUsuarios(locals);
+          found=newU;
+        }
+      }
+    }catch(e){}
+    if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
+  }
   // Puxa roles atualizados do servidor antes de aplicar o login
   try{
     const sr=await fetch('/api/public/users');
@@ -1286,7 +1302,7 @@ function renderAdminPanel(){
   });
   document.getElementById('admin-msg').textContent='';
 }
-function adicionarUsuario(){
+async function adicionarUsuario(){
   const usuario=document.getElementById('new-usuario').value.trim().toLowerCase();
   const nome=document.getElementById('new-nome').value.trim().toUpperCase();
   const codigo=document.getElementById('new-codigo').value.trim();
@@ -1298,6 +1314,9 @@ function adicionarUsuario(){
   const role=(document.getElementById('new-role')?.value)||'vendedor';
   const novoUser={usuario,senha,codigo,nome,role,admin:role==='admin',dadosIniciais:false};
   lista.push(novoUser);salvarUsuarios(lista);
+  // Registra no servidor para que o usuário possa logar de qualquer computador
+  const _at=sessionStorage.getItem('dt_srv_token')||'';
+  if(_at){try{await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:usuario,nome,senha,role,cod:codigo})});}catch(e){}}
   const link=gerarLinkConvite(novoUser);
   document.getElementById('invite-link-text').textContent=link;
   document.getElementById('invite-result').style.display='block';
@@ -1309,10 +1328,10 @@ function adicionarUsuario(){
 function gerarLinkConvite(u){const payload=btoa(JSON.stringify({usuario:u.usuario,senha:u.senha,nome:u.nome,codigo:u.codigo||'',dadosIniciais:false}));return `${location.origin}${location.pathname}#convite=${payload}`;}
 function copiarLinkConvite(){navigator.clipboard.writeText(document.getElementById('invite-link-text').textContent).then(()=>{const el=document.getElementById('link-copied');el.style.display='inline';setTimeout(()=>el.style.display='none',2500);});}
 function gerarLinkParaUsuario(usuario){const u=getUsuarios().find(x=>x.usuario===usuario);if(!u)return;const link=gerarLinkConvite(u);document.getElementById('invite-link-text').textContent=link;document.getElementById('invite-result').style.display='block';document.getElementById('admin-msg').style.color='var(--text2)';document.getElementById('admin-msg').textContent=`Link gerado para "${usuario}"`;document.getElementById('invite-result').scrollIntoView({behavior:'smooth'});}
-function excluirUsuario(usuario){if(!confirm(`Excluir "${usuario}"?`))return;salvarUsuarios(getUsuarios().filter(u=>u.usuario!==usuario));localStorage.removeItem(`dt_dados_${usuario}`);renderAdminPanel();pushUsuariosParaServidor();}
+async function excluirUsuario(usuario){if(!confirm(`Excluir "${usuario}"?`))return;salvarUsuarios(getUsuarios().filter(u=>u.usuario!==usuario));localStorage.removeItem(`dt_dados_${usuario}`);renderAdminPanel();pushUsuariosParaServidor();const _at=sessionStorage.getItem('dt_srv_token')||'';if(_at){try{await fetch(`/api/users/${usuario}`,{method:'DELETE',headers:{'x-auth-token':_at}});}catch(e){}}}
 function abrirEdit(usuario){const u=getUsuarios().find(x=>x.usuario===usuario);if(!u)return;document.getElementById('edit-original').value=usuario;document.getElementById('edit-usuario').value=u.usuario;document.getElementById('edit-nome').value=u.nome;document.getElementById('edit-codigo').value=u.codigo||'';document.getElementById('edit-senha').value=u.senha;const er=document.getElementById('edit-role');if(er)er.value=getRole(u);document.getElementById('edit-msg').textContent='';document.getElementById('edit-overlay').classList.add('open');}
 function fecharEdit(){document.getElementById('edit-overlay').classList.remove('open');}
-function salvarEdicao(){
+async function salvarEdicao(){
   const original=document.getElementById('edit-original').value;
   const novoUsuario=document.getElementById('edit-usuario').value.trim().toLowerCase();
   const nome=document.getElementById('edit-nome').value.trim().toUpperCase();
@@ -1326,6 +1345,17 @@ function salvarEdicao(){
   if(novoUsuario!==original){const d=localStorage.getItem(`dt_dados_${original}`);if(d)localStorage.setItem(`dt_dados_${novoUsuario}`,d);localStorage.removeItem(`dt_dados_${original}`);if(original===usuarioAtual.usuario)sessionStorage.setItem('dt_sessao',novoUsuario);}
   const editRole=(document.getElementById('edit-role')?.value)||getRole(lista[idx]);
   lista[idx]={...lista[idx],usuario:novoUsuario,nome,codigo,senha,role:editRole,admin:editRole==='admin'};salvarUsuarios(lista);pushUsuariosParaServidor();
+  // Atualiza no servidor (role + senha)
+  const _at=sessionStorage.getItem('dt_srv_token')||'';
+  if(_at){try{
+    if(novoUsuario!==original){
+      // Nome de usuario mudou: cria novo e apaga antigo
+      await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:novoUsuario,nome,senha,role:editRole,cod:codigo})}).catch(()=>{});
+      await fetch(`/api/users/${original}`,{method:'DELETE',headers:{'x-auth-token':_at}}).catch(()=>{});
+    }else{
+      await fetch(`/api/users/${original}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({nome,senha,role:editRole,cod:codigo})});
+    }
+  }catch(e){}}
   if(original===usuarioAtual.usuario){usuarioAtual=lista[idx];document.getElementById('user-nome-badge').textContent=usuarioAtual.nome;document.getElementById('header-sub').textContent=`Vendedor ${usuarioAtual.codigo||'—'} · ${usuarioAtual.nome} · 2026`;}
   msgEl.style.color='var(--green)';msgEl.textContent='✓ Salvo!';setTimeout(fecharEdit,800);renderAdminPanel();
 }
@@ -1338,20 +1368,4 @@ function processarConvite(){
   try{
     const payload=JSON.parse(atob(hash.slice(9)));if(!payload.usuario||!payload.senha)return false;
     let lista=getUsuarios();const idx=lista.findIndex(u=>u.usuario===payload.usuario);
-    const novoUser={usuario:payload.usuario,senha:payload.senha,nome:payload.nome||payload.usuario.toUpperCase(),codigo:payload.codigo||'',admin:false,dadosIniciais:!!payload.dadosIniciais};
-    if(idx>=0)lista[idx]=novoUser;else lista.push(novoUser);
-    salvarUsuarios(lista);
-    document.getElementById('invite-user-info').textContent=`${novoUser.nome} · @${novoUser.usuario}`;
-    document.getElementById('invite-banner').classList.add('show');
-    history.replaceState(null,'',location.pathname);return true;
-  }catch(e){return false;}
-}
-function irParaLogin(){document.getElementById('invite-banner').classList.remove('show');document.getElementById('login-screen').style.display='flex';}
-
-// ══════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════
-if(!processarConvite())verificarSessao();
-</script>
-</body>
-</html>
+    const novoUser={usuario:payload.usuario,senha:payload.senha,nome
