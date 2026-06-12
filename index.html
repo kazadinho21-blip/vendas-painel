@@ -254,14 +254,8 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <span class="badge-live">● AO VIVO</span>
     <span id="hora"></span>
     <div class="user-badge"><div class="user-dot"></div><span id="user-nome-badge">—</span></div>
-    <div id="vendor-bar" style="display:none;align-items:center;gap:6px;margin-right:6px">
-      <span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">👁</span>
-      <select id="vendor-sel-global" onchange="trocarVendedor(this.value)" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:4px 8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;outline:none;max-width:180px">
-        <option value="todos">Todos os Vendedores</option>
-      </select>
-      <span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
-    </div>
-    <button id="sync-btn" onclick="sincronizarDados()" title="Sincronizar dados" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s">⟳ Sync</button>
+    <div id="vendor-bar" style="display:none;align-items:center;gap:6px;margin-right:6px"><span style="font-size:9px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.06em">👁</span><select id="vendor-sel-global" onchange="trocarVendedor(this.value)" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:4px 8px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;outline:none;max-width:180px"><option value="todos">Todos os Vendedores</option></select><span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span></div>
+    <button id="sync-btn" onclick="sincronizarDados()" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer">⟳ Sync</button>
     <button class="logout-btn" onclick="fazerLogout()">↩ Sair</button>
   </div>
 </header>
@@ -321,12 +315,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
     <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Meses com dados:</div>
     <div class="meses-pills" id="pills-meses"></div>
   </div>
-  <div id="import-vendor-box" style="display:none;margin-bottom:16px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);padding:14px 16px">
-    <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Importar relatório para:</div>
-    <select class="sel" id="import-vendor-sel" style="width:100%;max-width:340px">
-      <option value="">— selecione o vendedor —</option>
-    </select>
-  </div>
+  <div id="import-vendor-box" style="display:none;margin-bottom:16px;background:var(--bg3);border:1px solid var(--line2);border-radius:var(--r);padding:14px 16px"><div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Importar relatório para:</div><select class="sel" id="import-vendor-sel" style="width:100%;max-width:340px"><option value="">— selecione o vendedor —</option></select></div>
   <div class="import-zone" id="drop-zone" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)" onclick="document.getElementById('file-input').click()">
     <div class="import-ic">📄</div>
     <div class="import-title">Arraste o PDF aqui ou clique para selecionar</div>
@@ -687,7 +676,6 @@ async function fazerLogin(){
   const erroEl=document.getElementById('l-erro');
   erroEl.textContent='';
   let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
-  // Se não existe localmente, tenta no servidor (usuário criado em outro computador)
   if(!found){
     try{
       const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});
@@ -704,7 +692,6 @@ async function fazerLogin(){
     }catch(e){}
     if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
   }
-  // Puxa roles atualizados do servidor
   try{
     const sr=await fetch('/api/public/users');
     if(sr.ok){
@@ -722,7 +709,6 @@ async function fazerLogin(){
       }
     }
   }catch(e){}
-  // Auth token para /api/parse-text
   try{const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});if(sr.ok){const sd=await sr.json();if(sd.token)sessionStorage.setItem('dt_srv_token',sd.token);}}catch(e){}
   usuarioAtual=found;
   sessionStorage.setItem('dt_sessao',found.usuario);
@@ -747,6 +733,12 @@ async function fazerLogin(){
   carregarDadosAtivos();
   buildDashboard();
   resetarNavegacao();
+  // Vendedor: envia dados existentes ao servidor para gerente ver
+  if(!isGerente()){
+    const _raw=localStorage.getItem(`dt_dados_${found.usuario}`);
+    if(_raw){try{const _st=JSON.parse(_raw);if(_st&&_st.meses&&_st.clientes)pushSalesData(found.usuario,_st);}catch(e){}}
+  }
+  // Gerente/admin: puxa dados de todos do servidor
   if(isGerente()){sincronizarDados();}
 }
 
@@ -1312,7 +1304,7 @@ async function adicionarUsuario(){
   document.getElementById('link-copied').style.display='none';
   ['new-usuario','new-nome','new-codigo','new-senha'].forEach(id=>document.getElementById(id).value='');
   msgEl.style.color='var(--green)';msgEl.textContent=`✓ "${usuario}" criado!`;
-  renderAdminPanel();
+  renderAdminPanel();pushUsuariosParaServidor();
 }
 function gerarLinkConvite(u){const payload=btoa(JSON.stringify({usuario:u.usuario,senha:u.senha,nome:u.nome,codigo:u.codigo||'',dadosIniciais:false}));return `${location.origin}${location.pathname}#convite=${payload}`;}
 function copiarLinkConvite(){navigator.clipboard.writeText(document.getElementById('invite-link-text').textContent).then(()=>{const el=document.getElementById('link-copied');el.style.display='inline';setTimeout(()=>el.style.display='none',2500);});}
