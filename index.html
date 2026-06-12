@@ -261,7 +261,7 @@ td{padding:8px 12px;font-family:var(--mono);font-size:11px;white-space:nowrap}
       </select>
       <span id="vendor-bar-info" style="font-size:10px;font-family:var(--mono);color:var(--text3);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
     </div>
-    <button id="sync-btn" onclick="sincronizarDados()" title="Sincronizar dados de todos os vendedores" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s">⟳ Sync</button>
+    <button id="sync-btn" onclick="sincronizarDados()" title="Sincronizar dados" style="background:var(--bg3);border:1px solid var(--line2);border-radius:5px;padding:5px 10px;color:var(--text2);font-family:var(--mono);font-size:11px;cursor:pointer;transition:all .15s">⟳ Sync</button>
     <button class="logout-btn" onclick="fazerLogout()">↩ Sair</button>
   </div>
 </header>
@@ -546,8 +546,6 @@ function carregarEstadoVendedor(username){
 }
 function carregarDadosCombinados(){
   const combined={meses:{},clientes:{}};
-  // Itera todas as chaves dt_dados_* do localStorage — não depende de getUsuarios()
-  // Isso garante que dados de vendedores sincronizados do servidor também sejam incluídos
   Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
     try{
       const st=JSON.parse(localStorage.getItem(key));
@@ -592,21 +590,17 @@ function trocarVendedor(val){
   const _vbi=document.getElementById('vendor-bar-info');if(_vbi)_vbi.textContent=vendedorVizualizado!=='todos'?vendedorVizualizado:'';
   carregarDadosAtivos();buildDashboard();
 }
-// Empurra ESTADO do usuario atual para o servidor (apos import)
 async function pushSalesData(username,estado){
   try{await fetch('/api/public/sales-push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:username,estado})});}catch(e){}
 }
-// Empurra lista de usuarios (sem senha) para o servidor
 async function pushUsuariosParaServidor(){
   try{const lista=getUsuarios().map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});}catch(e){}
 }
-// Sincronizar: puxa roles E dados de vendas do servidor
 async function sincronizarDados(){
   const btn=document.getElementById('sync-btn');
   if(btn){btn.textContent='⟳ ...';btn.disabled=true;}
   let ok=false;
   try{
-    // 1. Puxa roles atualizados
     const ur=await fetch('/api/public/users');
     if(ur.ok){
       const lista=await ur.json();
@@ -621,7 +615,6 @@ async function sincronizarDados(){
         if(changed>0){salvarUsuarios(locals);if(usuarioAtual){const me=locals.find(l=>l.usuario===usuarioAtual.usuario);if(me)usuarioAtual=me;}}
       }
     }
-    // 2. Puxa dados de vendas de todos os vendedores
     const sr=await fetch('/api/public/sales');
     if(sr.ok){
       const allSales=await sr.json();
@@ -629,18 +622,16 @@ async function sincronizarDados(){
       Object.entries(allSales).forEach(([username,d])=>{
         if(d&&d.estado&&d.estado.meses&&d.estado.clientes){
           localStorage.setItem(`dt_dados_${username}`,JSON.stringify(d.estado));
-          // Adiciona o vendedor na lista local se ainda não estiver (sem senha — só para aparecer no seletor)
           if(!locals.find(l=>l.usuario===username)){
             const meta=d.meta||{};
-            locals.push({usuario:username,nome:meta.nome||username,codigo:meta.codigo||'',role:meta.role||'vendedor',admin:false,senha:'__sync__',dadosIniciais:false});
+            locals.push({usuario:username,nome:meta.nome||username.toUpperCase(),codigo:meta.codigo||'',role:meta.role||'vendedor',admin:false,senha:'__sync__',dadosIniciais:false});
             usersChanged=true;
           }
         }
       });
-      if(usersChanged){salvarUsuarios(locals);}
+      if(usersChanged)salvarUsuarios(locals);
     }
     ok=true;
-    // 3. Recarrega
     if(isGerente()){atualizarSeletorVendedores();document.getElementById('nav-vendedores').style.display='flex';document.getElementById('vendor-bar').style.display='flex';const _ivb=document.getElementById('import-vendor-box');if(_ivb)_ivb.style.display='block';}
     carregarDadosAtivos();buildDashboard();
     if(isAdmin())renderAdminPanel();
@@ -694,9 +685,9 @@ async function fazerLogin(){
   const u=document.getElementById('l-user').value.trim().toLowerCase();
   const s=document.getElementById('l-pass').value;
   const erroEl=document.getElementById('l-erro');
-  let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
   erroEl.textContent='';
-  // Se não existe localmente, tenta login no servidor (usuário criado em outro computador)
+  let found=getUsuarios().find(x=>x.usuario===u&&x.senha===s);
+  // Se não existe localmente, tenta no servidor (usuário criado em outro computador)
   if(!found){
     try{
       const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});
@@ -713,7 +704,7 @@ async function fazerLogin(){
     }catch(e){}
     if(!found){erroEl.textContent='Usuário ou senha incorretos.';document.getElementById('l-pass').value='';return;}
   }
-  // Puxa roles atualizados do servidor antes de aplicar o login
+  // Puxa roles atualizados do servidor
   try{
     const sr=await fetch('/api/public/users');
     if(sr.ok){
@@ -731,7 +722,7 @@ async function fazerLogin(){
       }
     }
   }catch(e){}
-  // Auth token silencioso para /api/parse-text
+  // Auth token para /api/parse-text
   try{const sr=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({usuario:u,senha:s})});if(sr.ok){const sd=await sr.json();if(sd.token)sessionStorage.setItem('dt_srv_token',sd.token);}}catch(e){}
   usuarioAtual=found;
   sessionStorage.setItem('dt_sessao',found.usuario);
@@ -756,7 +747,6 @@ async function fazerLogin(){
   carregarDadosAtivos();
   buildDashboard();
   resetarNavegacao();
-  // Gerente/admin: puxa dados atualizados do servidor automaticamente ao logar
   if(isGerente()){sincronizarDados();}
 }
 
@@ -1107,11 +1097,11 @@ async function processarComClaude(){
       });
       _tst.meses[_mk]={total:data.total||0,pedidos:data.pedidos||0,meta:0,carregado:true};
       localStorage.setItem(`dt_dados_${_targetUser}`,JSON.stringify(_tst));
-      pushSalesData(_targetUser,_tst);
+      await pushSalesData(_targetUser,_tst);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
     }else{
       const ok=importarJSONdoClaude(data);if(!ok)throw new Error('Erro ao salvar dados.');
-      pushSalesData(usuarioAtual.usuario,ESTADO);
+      await pushSalesData(usuarioAtual.usuario,ESTADO);
     }
     setProgress(100);aiStepDone();
     setStatus(`✅ ${data.label} importado! ${Object.keys(data.clientes).length} clientes · R$ ${Math.round(data.total||0).toLocaleString('pt-BR')}`,'ok');
@@ -1206,11 +1196,11 @@ async function carregarPDF(file){
       });
       _tst.meses[info.mes]={total:Math.round(totalCalc*100)/100,pedidos:nLanc,meta:0,carregado:true};
       localStorage.setItem(`dt_dados_${_ltgt}`,JSON.stringify(_tst));
-      pushSalesData(_ltgt,_tst);
+      await pushSalesData(_ltgt,_tst);
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
     }else{
       aplicarDadosMes(info.mes,acumulado,totalCalc,nLanc,0);
-      pushSalesData(usuarioAtual.usuario,ESTADO);
+      await pushSalesData(usuarioAtual.usuario,ESTADO);
     }
     setStatus(`✓ ${info.label} importado! ${Object.keys(acumulado).length} clientes`,'ok');
     addLog('✅ Concluído!','ok');
@@ -1293,7 +1283,7 @@ function resetarDados(){
 function renderAdminPanel(){
   if(!isAdmin())return;
   const tbody=document.getElementById('admin-tbody');tbody.innerHTML='';
-  getUsuarios().forEach(u=>{
+  getUsuarios().filter(u=>u.senha!=='__sync__').forEach(u=>{
     const isSelf=u.usuario===usuarioAtual.usuario;const r=getRole(u);
     const roleColor=r==='admin'?'var(--green)':r==='gerente'?'#60a5fa':'var(--text3)';
     const tr=document.createElement('tr');
@@ -1314,7 +1304,6 @@ async function adicionarUsuario(){
   const role=(document.getElementById('new-role')?.value)||'vendedor';
   const novoUser={usuario,senha,codigo,nome,role,admin:role==='admin',dadosIniciais:false};
   lista.push(novoUser);salvarUsuarios(lista);
-  // Registra no servidor para que o usuário possa logar de qualquer computador
   const _at=sessionStorage.getItem('dt_srv_token')||'';
   if(_at){try{await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:usuario,nome,senha,role,cod:codigo})});}catch(e){}}
   const link=gerarLinkConvite(novoUser);
@@ -1323,7 +1312,7 @@ async function adicionarUsuario(){
   document.getElementById('link-copied').style.display='none';
   ['new-usuario','new-nome','new-codigo','new-senha'].forEach(id=>document.getElementById(id).value='');
   msgEl.style.color='var(--green)';msgEl.textContent=`✓ "${usuario}" criado!`;
-  renderAdminPanel();pushUsuariosParaServidor();
+  renderAdminPanel();
 }
 function gerarLinkConvite(u){const payload=btoa(JSON.stringify({usuario:u.usuario,senha:u.senha,nome:u.nome,codigo:u.codigo||'',dadosIniciais:false}));return `${location.origin}${location.pathname}#convite=${payload}`;}
 function copiarLinkConvite(){navigator.clipboard.writeText(document.getElementById('invite-link-text').textContent).then(()=>{const el=document.getElementById('link-copied');el.style.display='inline';setTimeout(()=>el.style.display='none',2500);});}
@@ -1345,16 +1334,12 @@ async function salvarEdicao(){
   if(novoUsuario!==original){const d=localStorage.getItem(`dt_dados_${original}`);if(d)localStorage.setItem(`dt_dados_${novoUsuario}`,d);localStorage.removeItem(`dt_dados_${original}`);if(original===usuarioAtual.usuario)sessionStorage.setItem('dt_sessao',novoUsuario);}
   const editRole=(document.getElementById('edit-role')?.value)||getRole(lista[idx]);
   lista[idx]={...lista[idx],usuario:novoUsuario,nome,codigo,senha,role:editRole,admin:editRole==='admin'};salvarUsuarios(lista);pushUsuariosParaServidor();
-  // Atualiza no servidor (role + senha)
   const _at=sessionStorage.getItem('dt_srv_token')||'';
   if(_at){try{
     if(novoUsuario!==original){
-      // Nome de usuario mudou: cria novo e apaga antigo
       await fetch('/api/users',{method:'POST',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({id:novoUsuario,nome,senha,role:editRole,cod:codigo})}).catch(()=>{});
       await fetch(`/api/users/${original}`,{method:'DELETE',headers:{'x-auth-token':_at}}).catch(()=>{});
-    }else{
-      await fetch(`/api/users/${original}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({nome,senha,role:editRole,cod:codigo})});
-    }
+    }else{await fetch(`/api/users/${original}`,{method:'PUT',headers:{'Content-Type':'application/json','x-auth-token':_at},body:JSON.stringify({nome,senha,role:editRole,cod:codigo})});}
   }catch(e){}}
   if(original===usuarioAtual.usuario){usuarioAtual=lista[idx];document.getElementById('user-nome-badge').textContent=usuarioAtual.nome;document.getElementById('header-sub').textContent=`Vendedor ${usuarioAtual.codigo||'—'} · ${usuarioAtual.nome} · 2026`;}
   msgEl.style.color='var(--green)';msgEl.textContent='✓ Salvo!';setTimeout(fecharEdit,800);renderAdminPanel();
@@ -1368,4 +1353,20 @@ function processarConvite(){
   try{
     const payload=JSON.parse(atob(hash.slice(9)));if(!payload.usuario||!payload.senha)return false;
     let lista=getUsuarios();const idx=lista.findIndex(u=>u.usuario===payload.usuario);
-    const novoUser={usuario:payload.usuario,senha:payload.senha,nome
+    const novoUser={usuario:payload.usuario,senha:payload.senha,nome:payload.nome||payload.usuario.toUpperCase(),codigo:payload.codigo||'',admin:false,dadosIniciais:!!payload.dadosIniciais};
+    if(idx>=0)lista[idx]=novoUser;else lista.push(novoUser);
+    salvarUsuarios(lista);
+    document.getElementById('invite-user-info').textContent=`${novoUser.nome} · @${novoUser.usuario}`;
+    document.getElementById('invite-banner').classList.add('show');
+    history.replaceState(null,'',location.pathname);return true;
+  }catch(e){return false;}
+}
+function irParaLogin(){document.getElementById('invite-banner').classList.remove('show');document.getElementById('login-screen').style.display='flex';}
+
+// ══════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════
+if(!processarConvite())verificarSessao();
+</script>
+</body>
+</html>
