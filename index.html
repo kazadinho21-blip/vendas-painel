@@ -727,6 +727,8 @@ async function fazerLogin(){
   carregarDadosAtivos();
   buildDashboard();
   resetarNavegacao();
+  // Gerente/admin: puxa dados atualizados do servidor automaticamente ao logar
+  if(isGerente()){sincronizarDados();}
 }
 
 function fazerLogout(){
