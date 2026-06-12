@@ -595,28 +595,51 @@ function trocarVendedor(val){
 // ── Sync server ──────────────────────────────────────────────────────────────
 async function pushSalesData(username,estado){
   try{
-    await fetch('/api/public/sales-push',{method:'POST',
+    const r=await fetch('/api/public/sales-push',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({usuario:username,estado})});
-  }catch(e){}
+    return r.ok;
+  }catch(e){return false;}
 }
 async function publicarDados(){
-  // Vendedor publica dados existentes ao servidor manualmente
   const btn=document.getElementById('nav-publicar');
-  if(btn){btn.textContent='📤 Publicando...';btn.style.pointerEvents='none';}
+  if(btn){btn.innerHTML='<span class="nav-ic">⏳</span>Publicando...';btn.style.pointerEvents='none';}
   const st=carregarEstadoVendedor(usuarioAtual.usuario);
   if(Object.keys(st.meses).length===0){
     if(btn){btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';}
     alert('Nenhum dado encontrado. Importe seus PDFs primeiro.');return;
   }
-  await pushSalesData(usuarioAtual.usuario,st);
-  if(btn){btn.innerHTML='<span class="nav-ic">✓</span>Publicado!';setTimeout(()=>{btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';},2000);}
+  const ok=await pushSalesData(usuarioAtual.usuario,st);
+  if(ok){
+    if(btn){btn.innerHTML='<span class="nav-ic">✅</span>Publicado!';setTimeout(()=>{btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';},3000);}
+  }else{
+    if(btn){btn.innerHTML='<span class="nav-ic">❌</span>Erro!';setTimeout(()=>{btn.innerHTML='<span class="nav-ic">📤</span>Publicar Dados';btn.style.pointerEvents='';},3000);}
+    alert('Falha ao publicar. Verifique sua conexão e tente novamente.');
+  }
 }
 async function pushUsuariosParaServidor(){
   try{
     const lista=getUsuarios().filter(u=>u.senha!=='__ext__').map(u=>({usuario:u.usuario,nome:u.nome,codigo:u.codigo||'',role:getRole(u)}));
     await fetch('/api/push-users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({users:lista})});
   }catch(e){}
+}
+function mostrarToastSync(count){
+  let toast=document.getElementById('sync-toast');
+  if(!toast){toast=document.createElement('div');toast.id='sync-toast';
+    toast.style.cssText='position:fixed;bottom:24px;right:24px;padding:10px 18px;border-radius:8px;font-family:var(--mono);font-size:12px;z-index:9999;transition:opacity 0.4s;pointer-events:none;';
+    document.body.appendChild(toast);}
+  if(count===0){
+    toast.style.background='rgba(251,191,36,0.15)';toast.style.border='1px solid rgba(251,191,36,0.4)';
+    toast.style.color='var(--amber)';
+    toast.textContent='⚠ Servidor sem dados. Peça aos vendedores que abram o painel.';
+  }else{
+    toast.style.background='rgba(74,222,128,0.12)';toast.style.border='1px solid rgba(74,222,128,0.3)';
+    toast.style.color='var(--green)';
+    toast.textContent='✓ Sync: '+count+' vendedor'+(count>1?'es':'')+' sincronizado'+(count>1?'s':'')+'!';
+  }
+  toast.style.opacity='1';
+  clearTimeout(window._syncToastTimer);
+  window._syncToastTimer=setTimeout(()=>{toast.style.opacity='0';},count===0?6000:3000);
 }
 async function sincronizarDados(){
   const btn=document.getElementById('sync-btn');
@@ -637,7 +660,6 @@ async function sincronizarDados(){
               locals[idx]={...u,role:srv.role,nome:srv.nome,codigo:srv.codigo,admin:srv.role==='admin'};changed++;
             }
           }else if(srv.usuario){
-            // Usuário conhecido no servidor mas não localmente — adiciona como externo
             locals.push({usuario:srv.usuario,nome:srv.nome,codigo:srv.codigo||'',role:srv.role,admin:srv.role==='admin',senha:'__ext__',dadosIniciais:false});
             changed++;
           }
@@ -647,8 +669,10 @@ async function sincronizarDados(){
     }
     // 2. Puxa dados de vendas
     const sr=await fetch('/api/public/sales');
+    let vendedoresSincronizados=0;
     if(sr.ok){
       const allSales=await sr.json();
+      vendedoresSincronizados=Object.keys(allSales).length;
       Object.entries(allSales).forEach(([username,d])=>{
         if(d&&d.estado&&d.estado.meses&&d.estado.clientes){
           salvarEstadoVendedor(username,d.estado);
@@ -664,8 +688,10 @@ async function sincronizarDados(){
     }
     carregarDadosAtivos();buildDashboard();
     if(isAdmin())renderAdminPanel();
+    // Mostrar resultado do sync
+    mostrarToastSync(vendedoresSincronizados);
   }catch(e){console.error('Sync error:',e);}
-  if(btn){btn.textContent=ok?'✓ Sync':'✗ Erro';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},2000);}
+  if(btn){btn.textContent=ok?'✓ Sync':'✗ Erro';setTimeout(()=>{btn.textContent='⟳ Sync';btn.disabled=false;},3000);}
 }
 function carregarDadosUsuario(){
   ESTADO={meses:{},clientes:{}};
@@ -784,6 +810,24 @@ async function fazerLogin(){
   carregarDadosAtivos();
   buildDashboard();
   resetarNavegacao();
+  // Admin: publica dados de TODOS os vendedores que tem no localStorage
+  // Isso garante que após redeploy, os dados voltam ao servidor assim que admin abre
+  if(_role==='admin'){
+    Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
+      const uname=key.replace('dt_dados_','');
+      if(!uname)return;
+      try{const st=JSON.parse(localStorage.getItem(key));if(st&&st.meses&&Object.keys(st.meses).length>0)pushSalesData(uname,st);}catch(e){}
+    });
+    pushUsuariosParaServidor();
+  }
+  // Gerente: re-publica dados que já tem no localStorage (pode ser de sync anterior)
+  if(_role==='gerente'){
+    Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
+      const uname=key.replace('dt_dados_','');
+      if(!uname||uname===found.usuario)return;// pula dados próprios, gerente não importa PDF
+      try{const st=JSON.parse(localStorage.getItem(key));if(st&&st.meses&&Object.keys(st.meses).length>0)pushSalesData(uname,st);}catch(e){}
+    });
+  }
   // Gerente/admin: sincroniza automaticamente
   if(isGerente())sincronizarDados();
 }
@@ -1238,7 +1282,8 @@ async function carregarPDF(file){
       if(vendedorVizualizado==='todos'){ESTADO=carregarDadosCombinados();renderPills();renderFiltros();buildDashboard();}
     }else{
       aplicarDadosMes(info.mes,acumulado,totalCalc,nLanc,0);
-      await pushSalesData(usuarioAtual.usuario,ESTADO);
+      const pushOk=await pushSalesData(usuarioAtual.usuario,ESTADO);
+      if(!pushOk)addLog('⚠ Dados salvos localmente mas falha ao publicar no servidor.','warn');
     }
     setStatus('✓ '+info.label+' importado! '+Object.keys(acumulado).length+' clientes','ok');
     addLog('✅ Concluído!','ok');
