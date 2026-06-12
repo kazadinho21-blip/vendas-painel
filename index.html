@@ -546,19 +546,24 @@ function carregarEstadoVendedor(username){
 }
 function carregarDadosCombinados(){
   const combined={meses:{},clientes:{}};
-  getUsuarios().forEach(u=>{
-    const st=carregarEstadoVendedor(u.usuario);
-    Object.entries(st.meses||{}).forEach(([mk,m])=>{
-      if(!combined.meses[mk])combined.meses[mk]={total:0,pedidos:0,meta:0,carregado:false};
-      combined.meses[mk].total=Math.round((combined.meses[mk].total+(m.total||0))*100)/100;
-      combined.meses[mk].pedidos=(combined.meses[mk].pedidos||0)+(m.pedidos||0);
-      if(m.carregado)combined.meses[mk].carregado=true;
-    });
-    Object.entries(st.clientes||{}).forEach(([cod,c])=>{
-      if(!combined.clientes[cod])combined.clientes[cod]={nome:c.nome};
-      else if((c.nome||'').length>(combined.clientes[cod].nome||'').length)combined.clientes[cod].nome=c.nome;
-      Object.entries(c).forEach(([k,v])=>{if(k!=='nome')combined.clientes[cod][k]=Math.round(((combined.clientes[cod][k]||0)+v)*100)/100;});
-    });
+  // Itera todas as chaves dt_dados_* do localStorage — não depende de getUsuarios()
+  // Isso garante que dados de vendedores sincronizados do servidor também sejam incluídos
+  Object.keys(localStorage).filter(k=>k.startsWith('dt_dados_')).forEach(key=>{
+    try{
+      const st=JSON.parse(localStorage.getItem(key));
+      if(!st||!st.clientes||!st.meses)return;
+      Object.entries(st.meses).forEach(([mk,m])=>{
+        if(!combined.meses[mk])combined.meses[mk]={total:0,pedidos:0,meta:0,carregado:false};
+        combined.meses[mk].total=Math.round((combined.meses[mk].total+(m.total||0))*100)/100;
+        combined.meses[mk].pedidos=(combined.meses[mk].pedidos||0)+(m.pedidos||0);
+        if(m.carregado)combined.meses[mk].carregado=true;
+      });
+      Object.entries(st.clientes).forEach(([cod,c])=>{
+        if(!combined.clientes[cod])combined.clientes[cod]={nome:c.nome||''};
+        else if((c.nome||'').length>(combined.clientes[cod].nome||'').length)combined.clientes[cod].nome=c.nome;
+        Object.entries(c).forEach(([k,v])=>{if(k!=='nome')combined.clientes[cod][k]=Math.round(((combined.clientes[cod][k]||0)+v)*100)/100;});
+      });
+    }catch(e){}
   });
   return combined;
 }
@@ -620,11 +625,19 @@ async function sincronizarDados(){
     const sr=await fetch('/api/public/sales');
     if(sr.ok){
       const allSales=await sr.json();
+      const locals=getUsuarios();let usersChanged=false;
       Object.entries(allSales).forEach(([username,d])=>{
         if(d&&d.estado&&d.estado.meses&&d.estado.clientes){
           localStorage.setItem(`dt_dados_${username}`,JSON.stringify(d.estado));
+          // Adiciona o vendedor na lista local se ainda não estiver (sem senha — só para aparecer no seletor)
+          if(!locals.find(l=>l.usuario===username)){
+            const meta=d.meta||{};
+            locals.push({usuario:username,nome:meta.nome||username,codigo:meta.codigo||'',role:meta.role||'vendedor',admin:false,senha:'__sync__',dadosIniciais:false});
+            usersChanged=true;
+          }
         }
       });
+      if(usersChanged){salvarUsuarios(locals);}
     }
     ok=true;
     // 3. Recarrega
